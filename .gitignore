@@ -3,3 +3,4 @@ node_modules
 .dev.vars
 config.json
 wrangler.toml
+.tmp/
