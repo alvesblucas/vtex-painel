@@ -241,6 +241,56 @@ test('PATCH: admin comum dando admin:true a outro → 403; super admin → 200',
   assert.equal(JSON.parse(a.depois).admin, 1);
 });
 
+// ---------- R15: admin comum só muda o próprio nome e não mexe em outros admins ----------
+
+test('PATCH R15: admin comum no próprio perfil/ajustes → 403 somente-super-admin, nada gravado', async () => {
+  const db = await banco();
+  const params = { email: ADMIN };
+  for (const corpo of [{ perfil: 'compras' }, { ajustes: { abas: { vendas: false } } }, { nome: 'Bia N.', ajustes: { ver_valores: false } }]) {
+    const r = await pedir(db, 'PATCH', '/api/admin/usuarios/bia', usuario, { params, corpo });
+    assert.equal(r.status, 403, JSON.stringify(corpo));
+    assert.equal(r.corpo.erro, 'somente-super-admin');
+  }
+  const u = await linhaUsuario(db, ADMIN);
+  assert.equal(u.nome, 'Bia');
+  assert.equal(u.perfil, 'gestao');
+  assert.equal(u.ajustes, null);
+  assert.equal((await linhasAuditoria(db)).length, 0);
+  const ok = await pedir(db, 'PATCH', '/api/admin/usuarios/bia', usuario, { params, corpo: { nome: 'Bia N.' } });
+  assert.equal(ok.status, 200);
+  assert.equal((await linhaUsuario(db, ADMIN)).nome, 'Bia N.');
+  assert.equal((await linhasAuditoria(db)).length, 1);
+});
+
+test('PATCH R15: admin comum em outro admin → 403 somente-super-admin; super admin → 200', async () => {
+  const db = await banco();
+  await db.prepare('INSERT INTO usuarios (email, nome, perfil, ajustes, admin, ativo, criado) VALUES (?,?,?,?,?,?,?)')
+    .bind('duda@exemplo.com', 'Duda', 'marketing', null, 1, 1, null).run();
+  const params = { email: 'Duda@Exemplo.com' };
+  for (const corpo of [{ nome: 'Outra' }, { ativo: false }, { perfil: 'compras' }, { ajustes: { ver_valores: false } }]) {
+    const r = await pedir(db, 'PATCH', '/api/admin/usuarios/duda', usuario, { params, corpo });
+    assert.equal(r.status, 403, JSON.stringify(corpo));
+    assert.equal(r.corpo.erro, 'somente-super-admin');
+  }
+  const u = await linhaUsuario(db, 'duda@exemplo.com');
+  assert.deepEqual([u.nome, u.perfil, u.ativo, u.ajustes], ['Duda', 'marketing', 1, null]);
+  assert.equal((await linhasAuditoria(db)).length, 0);
+  const s = await pedir(db, 'PATCH', '/api/admin/usuarios/duda', usuario, { email: SUPER, params, corpo: { perfil: 'compras', ativo: false } });
+  assert.equal(s.status, 200);
+  assert.equal((await linhasAuditoria(db)).length, 1);
+});
+
+
+test('PATCH: e-mail da rota chega codificado (%40) como no Pages → decodifica', async () => {
+  const db = await banco();
+  const r = await pedir(db, 'PATCH', '/api/admin/usuarios/ana%40exemplo.com', usuario, { params: { email: 'Ana%40Exemplo.com' }, corpo: { nome: 'Ana C.' } });
+  assert.equal(r.status, 200);
+  assert.equal((await linhaUsuario(db, 'ana@exemplo.com')).nome, 'Ana C.');
+  const ruim = await pedir(db, 'PATCH', '/x', usuario, { params: { email: '%E0%A4%A' }, corpo: { nome: 'X' } });
+  assert.equal(ruim.status, 404);
+  assert.equal((await linhasAuditoria(db)).length, 1);
+});
+
 test('PATCH usuário: parcial, ajustes, inexistente 404, validação 400', async () => {
   const db = await banco();
   const params = { email: 'ana@exemplo.com' };
