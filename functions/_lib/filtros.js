@@ -17,7 +17,7 @@ const invalido = (msg) => new ErroHttp(400, 'filtro-invalido', msg);
 
 const paraMs = (dia) => Date.parse(`${dia}T00:00:00Z`);
 const deMs = (ms) => new Date(ms).toISOString().slice(0, 10);
-const somarDias = (dia, n) => deMs(paraMs(dia) + n * DIA_MS);
+export const somarDias = (dia, n) => deMs(paraMs(dia) + n * DIA_MS);
 
 function diaValido(s) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
@@ -87,16 +87,19 @@ export function usaItens(f) {
   return f.marca.length > 0 || f.categoria.length > 0;
 }
 
-export function wherePedidos(f, periodo) {
-  const sql = ['p.cancelado = 0 AND p.dia BETWEEN ? AND ?'];
+// opções: `cancelado` 0 | 1 | null (null = não filtra); `itens: false` omite o EXISTS de marca/categoria
+// (quem chama junta `itens i` e aplica whereItens uma vez só).
+export function wherePedidos(f, periodo, { cancelado = 0, itens = true } = {}) {
+  const sql = ['p.dia BETWEEN ? AND ?'];
   const params = [periodo.de, periodo.ate];
+  if (cancelado === 0 || cancelado === 1) sql.unshift(`p.cancelado = ${cancelado}`);
   for (const l of ['origem', 'pagamento', 'uf', 'cidade', 'entrega']) {
     if (!f[l].length) continue;
     const c = em(`p.${l}`, f[l]);
     sql.push(c.sql);
     params.push(...c.params);
   }
-  if (usaItens(f)) {
+  if (itens && usaItens(f)) {
     const wi = whereItens(f);
     sql.push(`EXISTS (SELECT 1 FROM itens i WHERE i.pedido_id = p.id AND ${wi.sql})`);
     params.push(...wi.params);
