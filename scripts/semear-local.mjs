@@ -121,6 +121,9 @@ for (let d = DIAS; d >= 0; d--) {
 const usuarios = [
   { email: 'compras@exemplo.com', nome: 'Compras (exemplo)', perfil: 'compras', ajustes: null, admin: 0, ativo: 1, criado: new Date(agora).toISOString() },
   { email: 'mkt@exemplo.com', nome: 'Marketing (exemplo)', perfil: 'marketing', ajustes: JSON.stringify({ ver_valores: false }), admin: 0, ativo: 1, criado: new Date(agora).toISOString() },
+  // Dois administradores comuns: testar o que um admin pode mudar no outro e em si mesmo.
+  { email: 'gerente@exemplo.com', nome: 'Gerente (exemplo)', perfil: 'gestao', ajustes: null, admin: 1, ativo: 1, criado: new Date(agora).toISOString() },
+  { email: 'coord@exemplo.com', nome: 'Coordenação (exemplo)', perfil: 'marketing', ajustes: null, admin: 1, ativo: 1, criado: new Date(agora).toISOString() },
 ];
 const coletas = [{ fonte: 'pedidos', quando: new Date(agora).toISOString(), ok: 1, registros: pedidos.length, erro: null }];
 

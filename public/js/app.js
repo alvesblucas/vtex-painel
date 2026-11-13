@@ -1,19 +1,10 @@
 // Shell do painel: quem sou eu → menu com as abas permitidas → rota pelo hash → view da aba.
 import { api } from './api.js';
 import { montarBarra } from './barra-filtros.js';
-import { LISTAS, comLista, hojeLocal, lerHash, montarHash } from './estado.js';
+import { LISTAS, ROTULOS_ABAS, comLista, hojeLocal, lerHash, montarHash } from './estado.js';
 import { avisoDados, carregando, erroCartao, esc, pronto } from './ui.js';
 
-const ABAS = {
-  visao: 'Visão geral',
-  vendas: 'Vendas',
-  clientes: 'Clientes',
-  estoque: 'Estoque',
-  pedidos: 'Pedidos',
-  avaliacoes: 'Avaliações',
-  precos: 'Preços e Outlet',
-  saude: 'Saúde',
-};
+const ABAS = ROTULOS_ABAS;
 const ADMIN = { usuarios: 'Usuários e permissões' };
 const IMPLEMENTADAS = new Set(['visao', 'vendas', 'clientes', 'usuarios']);
 const ABAS_COM_FILTRO = ['visao', 'vendas', 'clientes'];
@@ -134,7 +125,7 @@ function montarShell() {
 let chaveBarra = null;
 
 function desenharBarra() {
-  if (!aplicaveisAtuais) {
+  if (!aplicaveisAtuais?.size) {
     chaveBarra = null;
     el.filtros.hidden = true;
     el.filtros._desmontar?.();

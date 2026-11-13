@@ -173,6 +173,7 @@ let idTabela = 0;
 /**
  * Tabela com busca, ordenação, paginação e CSV.
  * Colunas: { chave, titulo, formato?, alinhar?, ordenavel? (false = cabeçalho sem ordenação), soDesc? (só ordem decrescente) }.
+ *   celula?(linha, td): monta a célula com DOM próprio (escapar é com ela); busca/CSV continuam usando `formato`.
  * Modo cliente (padrão): recebe todas as linhas; busca/ordem/página locais; CSV do conjunto filtrado e ordenado.
  * Modo servidor: `servidor: { total, pagina, porPagina, ordem?: {chave, dir}, busca?, aoPagina(n), aoOrdenar(chave, dir), aoBuscar(texto) }`
  *   mostra só a página recebida; navegação chama os ganchos (busca com espera de 300 ms); `csvTodos: async () => linhas`
@@ -288,7 +289,8 @@ export function tabela(el, { colunas, linhas, porPagina = 25, busca = false, csv
         const f = formatoDe(c);
         const td = document.createElement('td');
         if (f.num || c.alinhar === 'direita') td.className = 'r num';
-        td.textContent = f.tela(l[c.chave]);
+        if (c.celula) c.celula(l, td);
+        else td.textContent = f.tela(l[c.chave]);
         linha.append(td);
       }
       tbody.append(linha);

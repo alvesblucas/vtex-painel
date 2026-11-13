@@ -1,5 +1,17 @@
 // Estado da tela na URL: `#<aba>?p=7d&cmp=ano&marca=A&marca=B`. Puro (sem DOM), testável no Node.
 
+// Rótulos das abas do painel (mesma ordem de functions/_lib/abas.js).
+export const ROTULOS_ABAS = {
+  visao: 'Visão geral',
+  vendas: 'Vendas',
+  clientes: 'Clientes',
+  estoque: 'Estoque',
+  pedidos: 'Pedidos',
+  avaliacoes: 'Avaliações',
+  precos: 'Preços e Outlet',
+  saude: 'Saúde',
+};
+
 export const PERIODOS = {
   hoje: 'Hoje',
   ontem: 'Ontem',
