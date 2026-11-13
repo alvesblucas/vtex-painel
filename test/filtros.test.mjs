@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lerFiltros, periodoComparacao, wherePedidos, whereItens, usaItens, LISTAS } from '../functions/_lib/filtros.js';
+import { lerFiltros, MAX_VALORES_TOTAL, periodoComparacao, wherePedidos, whereItens, usaItens, LISTAS } from '../functions/_lib/filtros.js';
 import { ErroHttp, erro, json } from '../functions/_lib/resposta.js';
 import { criarD1Falso } from './d1-falso.mjs';
 
@@ -99,6 +99,45 @@ test('wherePedidos no D1: origem + marca', async () => {
   ped('5', '2026-12-05', 'Google Ads');
   item('5', 'A');
   const f = lerFiltros(P('de=2026-11-01&ate=2026-11-30&origem=Google Ads&marca=A'), HOJE);
+  const w = wherePedidos(f, { de: f.de, ate: f.ate });
+  const r = await d1.prepare(`SELECT p.id FROM pedidos p WHERE ${w.sql} ORDER BY p.id`).bind(...w.params).all();
+  assert.deepEqual(r.results.map((x) => x.id), ['1']);
+});
+
+test('soma de valores das listas limitada a 40', () => {
+  const q = (n) => Array.from({ length: n }, (_, i) => (i < 30 ? 'marca=m' : 'categoria=c') + i).join('&');
+  assert.equal(MAX_VALORES_TOTAL, 40);
+  assert.doesNotThrow(() => lerFiltros(P(q(40)), HOJE));
+  assert.throws(
+    () => lerFiltros(P(q(41)), HOJE),
+    (e) => e instanceof ErroHttp && e.status === 400 && e.mensagem === 'máximo de 40 valores somando todos os filtros',
+  );
+});
+
+test('limite de período: 731 passa, 732 falha', () => {
+  assert.doesNotThrow(() => lerFiltros(P('de=2025-01-01&ate=2027-01-01'), HOJE));
+  assert.throws(() => lerFiltros(P('de=2025-01-01&ate=2027-01-02'), HOJE), (e) => e.status === 400);
+});
+
+test('cmp=ano em ano não bissexto', () => {
+  const f = lerFiltros(P('de=2026-03-01&ate=2026-03-10&cmp=ano'), HOJE);
+  assert.deepEqual(periodoComparacao(f), { de: '2025-03-01', ate: '2025-03-10' });
+});
+
+test('wherePedidos sem filtros de lista', () => {
+  const f = lerFiltros(P(''), HOJE);
+  assert.deepEqual(wherePedidos(f, { de: 'a', ate: 'b' }), { sql: 'p.cancelado = 0 AND p.dia BETWEEN ? AND ?', params: ['a', 'b'] });
+});
+
+test('wherePedidos no D1: marca + categoria juntas no mesmo item', async () => {
+  const d1 = await criarD1Falso();
+  for (const id of ['1', '2']) {
+    d1.exec(`INSERT INTO pedidos VALUES ('${id}','2026-11-05','2026-11-05T10:00:00Z','ok',0,100,0,0,'site','Outros',NULL,NULL,NULL,'pix',1,'RJ','Rio','entrega',NULL,'x')`);
+  }
+  d1.exec("INSERT INTO itens VALUES ('1','s1','p','n','A','X','d',1,100)");
+  d1.exec("INSERT INTO itens VALUES ('2','s1','p','n','A','Y','d',1,100)");
+  d1.exec("INSERT INTO itens VALUES ('2','s2','p','n','B','X','d',1,100)");
+  const f = lerFiltros(P('de=2026-11-01&ate=2026-11-30&marca=A&categoria=X'), HOJE);
   const w = wherePedidos(f, { de: f.de, ate: f.ate });
   const r = await d1.prepare(`SELECT p.id FROM pedidos p WHERE ${w.sql} ORDER BY p.id`).bind(...w.params).all();
   assert.deepEqual(r.results.map((x) => x.id), ['1']);

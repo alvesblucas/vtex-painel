@@ -4,6 +4,7 @@ export const LISTAS = ['origem', 'categoria', 'marca', 'pagamento', 'uf', 'cidad
 
 const MAX_DIAS = 731;
 const MAX_VALORES = 50;
+export const MAX_VALORES_TOTAL = 40;
 const MAX_TEXTO = 120;
 const DIA_MS = 86400000;
 const CMPS = ['anterior', 'ano', 'nenhum'];
@@ -50,6 +51,9 @@ export function lerFiltros(params, hojeLocal) {
   if (!CMPS.includes(cmp)) throw invalido('Comparação inválida.');
   const f = { de, ate, cmp };
   for (const l of LISTAS) f[l] = lerLista(params, l);
+  if (LISTAS.reduce((n, l) => n + f[l].length, 0) > MAX_VALORES_TOTAL) {
+    throw invalido(`máximo de ${MAX_VALORES_TOTAL} valores somando todos os filtros`);
+  }
   return f;
 }
 
