@@ -7,7 +7,7 @@
   "origens": [
     ["Google Ads", "gclid|google|cpc", "i"],
     ["E-mail", "email|newsletter", "i"],
-    ["Instagram", "instagram|^ig\b\b", "i"]
+    ["Instagram", "instagram|igshopping", "i"]
   ],
   "abas": ["visao", "vendas", "clientes"],
   "agenda": { "pedidos": { "horasMax": 3 } },
