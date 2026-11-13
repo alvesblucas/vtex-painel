@@ -1,0 +1,51 @@
+{
+  "orderId": "1234567890123-01",
+  "status": "invoiced",
+  "creationDate": "2026-11-13T02:30:00.0000000+00:00",
+  "value": 25990,
+  "salesChannel": "1",
+  "affiliateId": "",
+  "totals": [
+    { "id": "Items", "name": "Total dos Itens", "value": 24000 },
+    { "id": "Discounts", "name": "Total dos Descontos", "value": -1500 },
+    { "id": "Shipping", "name": "Total do Frete", "value": 3490 }
+  ],
+  "items": [
+    { "id": "501", "productId": "50", "name": "Luva Nitrilica Caixa", "quantity": 2, "sellingPrice": 4000,
+      "additionalInfo": { "brandName": "MarcaUm", "categories": [{ "id": 1, "name": "Departamento Teste" }, { "id": 2, "name": "Categoria Teste" }] } },
+    { "id": "502", "productId": "51", "name": "Seringa 10ml", "quantity": 1, "sellingPrice": 8000,
+      "additionalInfo": { "brandName": "MarcaDois", "categories": [{ "id": 1, "name": "Departamento Teste" }, { "id": 3, "name": "Sub Teste" }] } },
+    { "id": "501", "productId": "50", "name": "Luva Nitrilica Caixa", "quantity": 1, "sellingPrice": 4000,
+      "additionalInfo": { "brandName": "MarcaUm", "categories": [{ "id": 1, "name": "Departamento Teste" }, { "id": 2, "name": "Categoria Teste" }] } }
+  ],
+  "clientProfileData": {
+    "email": "fulano@exemplo.com",
+    "document": "12345678909",
+    "corporateDocument": null,
+    "isCorporate": false,
+    "phone": "+5521987654321",
+    "firstName": "Zeferino",
+    "lastName": "Quintanilha"
+  },
+  "shippingData": {
+    "address": {
+      "street": "Rua Jacarandazal Ficticia",
+      "number": "7391",
+      "postalCode": "29999-888",
+      "complement": "Bloco Zeta",
+      "neighborhood": "Bairro Inventado",
+      "state": "RJ",
+      "city": "Cidade Exemplo"
+    },
+    "logisticsInfo": [
+      { "selectedDeliveryChannel": "delivery" },
+      { "selectedDeliveryChannel": "pickup-in-point" }
+    ]
+  },
+  "paymentData": {
+    "transactions": [
+      { "payments": [ { "paymentSystemName": "Pix", "group": "instantPayment", "installments": 1 } ] }
+    ]
+  },
+  "marketingData": { "utmSource": "google", "utmMedium": "cpc", "utmCampaign": "campanha-teste" }
+}

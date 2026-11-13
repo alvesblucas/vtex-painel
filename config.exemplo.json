@@ -5,9 +5,9 @@
   "canalSite": "1",
   "afiliados": { "GSM": "Site" },
   "origens": [
-    ["Google Ads", "gclid|utm_source=google|utm_medium=cpc", "i"],
-    ["E-mail", "utm_medium=email|utm_source=newsletter", "i"],
-    ["Instagram", "instagram|utm_source=ig", "i"]
+    ["Google Ads", "gclid|google|cpc", "i"],
+    ["E-mail", "email|newsletter", "i"],
+    ["Instagram", "instagram|^ig\b", "i"]
   ],
   "abas": ["visao", "vendas", "clientes"],
   "agenda": { "pedidos": { "horasMax": 3 } },
