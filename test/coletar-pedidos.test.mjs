@@ -177,10 +177,53 @@ test('coletarDias: fonte de carga e erro ao abrir pedido', async () => {
   const r = await coletarDias(['2026-11-12'], deps, { fonte: 'carga:2026-11' });
   assert.equal(r.pedidos, 0);
   assert.equal(r.erros, 1);
-  assert.equal((await db.prepare("SELECT ok FROM coletas WHERE fonte = 'carga:2026-11'").first()).ok, 1);
+  const falha = await db.prepare("SELECT ok, erro FROM coletas WHERE fonte = 'carga:2026-11'").first();
+  assert.equal(falha.ok, 0);
+  assert.equal(falha.erro, '1 pedidos não abertos');
 
   const contador = { erros: 29 };
   await assert.rejects(coletarDias(['2026-11-12'], { ...deps, contador }), /30 pedidos com erro/);
+
+  vtex.get = original;
+  await coletarDias(['2026-11-12'], deps, { fonte: 'carga:2026-11' });
+  const certo = await db.prepare("SELECT ok, erro FROM coletas WHERE fonte = 'carga:2026-11'").first();
+  assert.equal(certo.ok, 1);
+  assert.equal(certo.erro, null);
+});
+
+test('coletarDias: pedido nulo conta como erro; 30 erros param os trabalhadores', async () => {
+  const lista = Array.from({ length: 40 }, (_, i) =>
+    pedido(`20000000000${String(i).padStart(2, '0')}-01`, `2026-11-12T13:${String(i).padStart(2, '0')}:00.000Z`));
+  const vtex = vtexFalso(lista);
+  const original = vtex.get;
+  let aberturas = 0;
+  vtex.get = (c) => {
+    if (c.startsWith('/api/oms/pvt/orders/')) { aberturas++; return Promise.resolve(null); }
+    return original(c);
+  };
+  const { deps } = await montar(vtex);
+  const contador = { erros: 0 };
+  await assert.rejects(coletarDias(['2026-11-12'], { ...deps, contador }), /30 pedidos com erro/);
+  assert.equal(contador.erros, 30);
+  assert.equal(contador.parar, true);
+  assert.ok(aberturas < 40, `abriu ${aberturas}`);
+});
+
+test('coletarDias: listagem com mais de 30 páginas falha', async () => {
+  const vtex = { async get() { return { list: [], paging: { pages: 31 } }; } };
+  const { deps } = await montar(vtex);
+  await assert.rejects(coletarDias(['2026-11-12'], deps), /mais de 3\.000 pedidos em 2026-11-12; listagem incompleta/);
+});
+
+test('coletarDias: pedido de marketplace não torna o cliente recorrente', async () => {
+  const mkt = pedido('1000000000001-01', '2026-11-12T13:00:00.000Z', { affiliateId: 'AMZ' });
+  const site = pedido('1000000000002-01', '2026-11-12T14:00:00.000Z');
+  const vtex = vtexFalso([mkt, site]);
+  const { db, deps } = await montar(vtex);
+  await coletarDias(['2026-11-12'], deps);
+  assert.equal(vtex.buscas(), 1);
+  const linha = await db.prepare('SELECT cliente_tipo FROM pedidos WHERE id = ?').bind(site.orderId).first();
+  assert.equal(linha.cliente_tipo, 'novo');
 });
 
 function resposta(status, corpo, cabecalhos = {}) {

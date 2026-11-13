@@ -54,7 +54,8 @@ export function limparErro(erro, segredos = []) {
 
 // ---------- OMS ----------
 // A listagem para em 30 páginas de 100 (3.000 pedidos); um dia cabe com folga.
-async function listarPedidos(vtex, de, ate, extra = {}) {
+// `dia`: listagem de um dia inteiro; se passar de 30 páginas, falha em vez de contar a menos.
+async function listarPedidos(vtex, de, ate, extra = {}, dia = null) {
   const saida = [];
   for (let pagina = 1; pagina <= 30; pagina++) {
     const q = new URLSearchParams({
@@ -65,6 +66,9 @@ async function listarPedidos(vtex, de, ate, extra = {}) {
       ...extra,
     });
     const r = await vtex.get(`/api/oms/pvt/orders?${q}`);
+    if (dia && pagina === 1 && (r?.paging?.pages ?? 0) > 30) {
+      throw new Error(`mais de 3.000 pedidos em ${dia}; listagem incompleta`);
+    }
     saida.push(...(r?.list ?? []));
     if (!r || pagina >= (r.paging?.pages ?? 0)) break;
   }
@@ -89,18 +93,24 @@ async function temCompraAnterior(vtex, pedido, chave, cfg) {
 function contarErro(contador, id, erro, log) {
   contador.erros++;
   log(`[erro] ${id} ${erro.message}`);
-  if (contador.erros >= LIMITE_ERROS) throw new Error(`${LIMITE_ERROS} pedidos com erro; abortando para não insistir contra a OMS.`);
+  if (contador.erros >= LIMITE_ERROS) {
+    contador.parar = true;
+    throw new Error(`${LIMITE_ERROS} pedidos com erro; abortando para não insistir contra a OMS.`);
+  }
 }
 
 async function abrirPedidos(lista, { vtex, esperar, log, contador }) {
   const abertos = [];
   let proximo = 0;
   async function trabalhador() {
-    while (proximo < lista.length) {
+    while (proximo < lista.length && !contador.parar) {
       const resumo = lista[proximo++];
       try {
-        abertos.push(await vtex.get(`/api/oms/pvt/orders/${resumo.orderId}`));
+        const pedido = await vtex.get(`/api/oms/pvt/orders/${resumo.orderId}`);
+        if (!pedido?.orderId || !pedido.creationDate) throw new Error('pedido vazio na resposta da OMS');
+        abertos.push(pedido);
       } catch (e) {
+        contador.naoAbertos++;
         contarErro(contador, resumo.orderId, e, log);
       }
       await esperar(PAUSA_MS);
@@ -116,10 +126,11 @@ async function classificar(pedido, existente, deps) {
   const { vtex, cfg, cache, contador, log } = deps;
   const chave = chaveCliente(pedido);
   const criado = Date.parse(pedido.creationDate);
+  const site = canalDe(pedido, cfg) === 'Site';
   const vistoAntes = chave !== null && cache.has(chave) && cache.get(chave) < criado;
-  if (chave !== null && pedido.status !== 'canceled' && !(cache.get(chave) <= criado)) cache.set(chave, criado);
+  if (site && chave !== null && pedido.status !== 'canceled' && !(cache.get(chave) <= criado)) cache.set(chave, criado);
   if (existente) return existente;
-  if (canalDe(pedido, cfg) !== 'Site') return null;
+  if (!site) return null;
   if (chave === null) return 'indefinido';
   if (vistoAntes) return 'recorrente';
   try {
@@ -145,7 +156,7 @@ function sqlDoDia(linhas) {
 async function coletarDia(dia, deps) {
   const { vtex, d1, cfg, aplicar, agora, log } = deps;
   const de = inicioDoDia(dia, cfg.fusoHoras);
-  const lista = await listarPedidos(vtex, de, de + DIA_MS);
+  const lista = await listarPedidos(vtex, de, de + DIA_MS, {}, dia);
   const abertos = await abrirPedidos(lista, deps);
   const existentes = new Map(
     (await d1.consulta('SELECT id, cliente_tipo FROM pedidos WHERE dia = ?', [dia])).map((r) => [r.id, r.cliente_tipo]),
@@ -176,18 +187,25 @@ export async function coletarDias(dias, deps, { fonte = 'pedidos' } = {}) {
     esperar: dormir,
     log: console.log,
     cache: new Map(),
-    contador: { erros: 0 },
     ...deps,
   };
+  // Contador compartilhado entre chamadas (carga + janela): completa os campos no próprio objeto.
+  d.contador = Object.assign(deps.contador ?? {}, { erros: 0, naoAbertos: 0, parar: false, ...deps.contador });
   const errosAntes = d.contador.erros;
+  const naoAbertosAntes = d.contador.naoAbertos;
   const total = { pedidos: 0, itens: 0 };
   for (const dia of dias) {
     const r = await coletarDia(dia, d);
     total.pedidos += r.pedidos;
     total.itens += r.itens;
   }
-  await registrarColeta(d.d1, { fonte, quando: d.agora(), ok: 1, registros: total.pedidos, erro: null });
-  return { ...total, erros: d.contador.erros - errosAntes };
+  const erros = d.contador.erros - errosAntes;
+  const naoAbertos = d.contador.naoAbertos - naoAbertosAntes;
+  // Mês da carga só fica feito sem erro; senão a próxima execução refaz o mês.
+  const falhou = fonte.startsWith('carga:') && erros > 0;
+  const erro = !falhou ? null : naoAbertos > 0 ? `${naoAbertos} pedidos não abertos` : `${erros} pedidos com erro`;
+  await registrarColeta(d.d1, { fonte, quando: d.agora(), ok: falhou ? 0 : 1, registros: total.pedidos, erro });
+  return { ...total, erros };
 }
 
 // ---------- CLI ----------
@@ -245,7 +263,7 @@ async function principal() {
       aplicar: criarAplicar(env.D1_NOME || 'painel'),
       agora,
       cache: new Map(),
-      contador: { erros: 0 },
+      contador: { erros: 0, naoAbertos: 0, parar: false },
     };
     const hoje = hojeLocal(cfg.fusoHoras);
     const total = { dias: 0, pedidos: 0, itens: 0 };
