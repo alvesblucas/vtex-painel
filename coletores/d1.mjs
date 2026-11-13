@@ -3,6 +3,7 @@ import { spawn as spawnReal } from 'node:child_process';
 const IDENT = /^[a-z_]+$/;
 const BLOCO = 200;
 const TENTATIVAS = 5;
+const MAX_VALORES = 90_000;
 
 export function sqlValor(v) {
   if (v === null || v === undefined) return 'NULL';
@@ -36,15 +37,23 @@ export function upsertSql(tabela, linhas, chave) {
     ? `DO UPDATE SET ${atualizar.map((c) => `${c}=excluded.${c}`).join(', ')}`
     : 'DO NOTHING';
   const instrucoes = [];
-  for (let i = 0; i < linhas.length; i += BLOCO) {
-    const valores = linhas
-      .slice(i, i + BLOCO)
-      .map((l) => `(${colunas.map((c) => sqlValor(l[c])).join(', ')})`)
-      .join(',\n');
+  const fechar = (valores) =>
     instrucoes.push(
-      `INSERT INTO ${tabela} (${colunas.join(', ')}) VALUES\n${valores}\nON CONFLICT(${chave.join(', ')}) ${conflito}`,
+      `INSERT INTO ${tabela} (${colunas.join(', ')}) VALUES\n${valores.join(',\n')}\nON CONFLICT(${chave.join(', ')}) ${conflito}`,
     );
+  let atual = [];
+  let tamanho = 0;
+  for (const l of linhas) {
+    const v = `(${colunas.map((c) => sqlValor(l[c])).join(', ')})`;
+    if (atual.length && (atual.length >= BLOCO || tamanho + v.length > MAX_VALORES)) {
+      fechar(atual);
+      atual = [];
+      tamanho = 0;
+    }
+    atual.push(v);
+    tamanho += v.length + 2;
   }
+  if (atual.length) fechar(atual);
   return instrucoes.join(';\n');
 }
 
@@ -71,19 +80,24 @@ export function criarD1Rest({ accountId, databaseId, token, fetch: f = globalThi
         if (!r.ok || corpo.success === false) {
           throw new Error(`D1 HTTP ${r.status}: ${msgs || 'erro desconhecido'}`);
         }
-        return corpo.result?.[0]?.results ?? [];
+        if (!Array.isArray(corpo.result)) throw new Error(`D1 HTTP ${r.status}: resposta sem result`);
+        return corpo.result[0]?.results ?? [];
       }
       throw ultimo;
     },
   };
 }
 
-export function aplicarArquivo(caminho, banco, { spawn = spawnReal } = {}) {
+export function aplicarArquivo(caminho, banco, { spawn = spawnReal, plataforma = process.platform } = {}) {
   return new Promise((resolve, reject) => {
+    if (!/^[\w-]+$/.test(banco)) throw new Error('Nome de banco inválido');
+    if (/["&|<>^%\r\n]/.test(caminho)) throw new Error('Caminho de arquivo inválido');
+    const win = plataforma === 'win32';
+    const arquivo = win ? `--file="${caminho}"` : `--file=${caminho}`;
     const filho = spawn(
       'npx',
-      ['wrangler', 'd1', 'execute', banco, '--remote', `--file=${caminho}`, '--yes'],
-      { shell: process.platform === 'win32', env: process.env, stdio: ['ignore', 'pipe', 'pipe'] },
+      ['wrangler', 'd1', 'execute', banco, '--remote', arquivo, '--yes'],
+      { shell: win, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     let stderr = '';
     filho.stderr.on('data', (d) => { stderr += d; });

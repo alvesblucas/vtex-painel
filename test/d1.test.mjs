@@ -110,7 +110,29 @@ function filhoFalso(codigo, stderr) {
 test('aplicarArquivo: saída ≠ 0 rejeita com stderr', async () => {
   let args;
   const falso = (cmd, a) => { args = a; return filhoFalso(1, 'boom'); };
-  await assert.rejects(aplicarArquivo('x.sql', 'painel', { spawn: falso }), /boom/);
+  await assert.rejects(aplicarArquivo('x.sql', 'painel', { spawn: falso, plataforma: 'linux' }), /boom/);
   assert.ok(args.includes('--file=x.sql'));
   await aplicarArquivo('x.sql', 'painel', { spawn: () => filhoFalso(0) });
+});
+
+test('aplicarArquivo: valida banco e caminho; aspas no win32', async () => {
+  const sp = () => filhoFalso(0);
+  await assert.rejects(aplicarArquivo('x.sql', 'a;b', { spawn: sp }), /banco/);
+  await assert.rejects(aplicarArquivo('x&y.sql', 'painel', { spawn: sp }), /Caminho/);
+  let args;
+  await aplicarArquivo('C:/minha pasta/x.sql', 'painel', { spawn: (c, a) => { args = a; return filhoFalso(0); }, plataforma: 'win32' });
+  assert.ok(args.includes('--file="C:/minha pasta/x.sql"'));
+});
+
+test('upsertSql: limita o tamanho de cada instrucao', () => {
+  const linhas = Array.from({ length: 50 }, (_, i) => ({ id: i, txt: 'x'.repeat(5000) }));
+  const partes = upsertSql('t', linhas, ['id']).split(';\n');
+  assert.ok(partes.length > 1);
+  for (const p of partes) assert.ok(p.length < 100_000);
+});
+
+test('criarD1Rest: 2xx sem JSON/result lanca', async () => {
+  const mk = (corpo) => criarD1Rest({ ...opcoes, fetch: async () => ({ status: 200, ok: true, json: corpo }), esperar: async () => {} });
+  await assert.rejects(mk(async () => { throw new Error('x'); }).consulta('x'), /sem result/);
+  await assert.rejects(mk(async () => ({ success: true })).consulta('x'), /sem result/);
 });
