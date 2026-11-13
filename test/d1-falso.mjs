@@ -33,6 +33,7 @@ export async function criarD1Falso() {
   for (const f of arquivos) db.exec(readFileSync(join(DIR_MIGRACOES, f), 'utf8'));
   return {
     prepare: (sql) => new Comando(db, sql),
+    exec: (sql) => db.exec(sql),
     async batch(comandos) {
       db.exec('BEGIN');
       try {
