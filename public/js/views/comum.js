@@ -19,7 +19,7 @@ export function estrutura(el, chave, html) {
  * Um bloco independente: esqueleto na 1ª vez (ou depois de erro), quadro esmaecido nas recargas,
  * erro com "Tentar de novo" só nele. Resposta de rota antiga nunca pinta (ctx.vivo()).
  */
-export async function bloco(el, ctx, { carregar, pintar, esqueleto = ESQUELETO, erro = 'Não foi possível carregar.' }) {
+export async function bloco(el, ctx, { carregar, pintar, aoFalhar, esqueleto = ESQUELETO, erro = 'Não foi possível carregar.' }) {
   el.setAttribute('aria-busy', 'true');
   if (el.dataset.pintado) el.classList.add('recarregando');
   else el.innerHTML = esqueleto;
@@ -34,7 +34,8 @@ export async function bloco(el, ctx, { carregar, pintar, esqueleto = ESQUELETO, 
     if (e?.name === 'AbortError' || !ctx.vivo()) return;
     delete el.dataset.pintado;
     el._ro?.disconnect();
-    erroCartao(el, e?.mensagem || erro, () => bloco(el, ctx, { carregar, pintar, esqueleto, erro }));
+    aoFalhar?.(e);
+    erroCartao(el, e?.mensagem || erro, () => bloco(el, ctx, { carregar, pintar, aoFalhar, esqueleto, erro }));
   }
 }
 

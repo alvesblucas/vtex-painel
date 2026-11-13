@@ -378,4 +378,5 @@ button.barra-linha:hover .pilha { filter: brightness(1.15); }
   .cartoes .cartao-valor { font-size: 19px; line-height: 26px; }
   .cartoes .cartao-sub { font-size: 12px; }
 }
-.cartao-central:focus-visible { outline: none; }
+/* Foco programático ao abrir a tela "sem acesso": indicador discreto na borda, sem contorno externo. */
+.cartao-central:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }

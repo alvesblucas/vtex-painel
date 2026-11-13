@@ -77,6 +77,7 @@ export async function render(el, ctx) {
     bloco(b('resumo'), ctx, {
       esqueleto: cartoesEsqueleto(vv ? 4 : 2, vv ? 's3' : 's6'),
       carregar: () => ctx.api('/api/vendas/resumo', f),
+      aoFalhar: () => marcarItens('resumo', false),
       pintar: (d) => {
         marcarItens('resumo', d.porItens);
         pintarResumo(b('resumo'), d, vv, f);
@@ -84,6 +85,7 @@ export async function render(el, ctx) {
     }),
     bloco(b('serie'), ctx, {
       carregar: () => ctx.api('/api/vendas/serie', f),
+      aoFalhar: () => marcarItens('serie', false),
       pintar: (d) => {
         marcarItens('serie', d.porItens);
         ultimos.serie = d;
@@ -92,6 +94,7 @@ export async function render(el, ctx) {
     }),
     ...QUEBRAS.map(([por]) => bloco(b(`q-${por}`), ctx, {
       carregar: () => ctx.api(`/api/vendas/quebra?por=${por}`, f),
+      aoFalhar: () => marcarItens(`q-${por}`, false),
       pintar: (d) => {
         if (!DE_ITENS.has(por)) marcarItens(`q-${por}`, d.porItens);
         ultimos[por] = d;
@@ -205,13 +208,16 @@ async function produtos(el, ctx, vv) {
     return ctx.api(`/api/vendas/produtos?${q}`, ctx.filtros);
   };
   let t = null;
+  // Página/ordem/busca em sequência rápida: só a resposta mais nova pinta.
+  let seq = 0;
   const ir = async (pagina) => {
+    const meu = ++seq;
     try {
       const d = await buscar(pagina);
-      if (!ctx.vivo()) return;
+      if (meu !== seq || !ctx.vivo()) return;
       t.atualizar({ linhas: d.itens, total: d.total, pagina: d.pagina });
     } catch (e) {
-      if (e?.name === 'AbortError' || !ctx.vivo()) return;
+      if (e?.name === 'AbortError' || meu !== seq || !ctx.vivo()) return;
       t.atualizar({});
       delete el.dataset.pintado;
       erroCartao(el, e?.mensagem || 'Não foi possível carregar os produtos.', () => produtos(el, ctx, vv));
@@ -220,6 +226,7 @@ async function produtos(el, ctx, vv) {
   const csvTodos = async () => {
     const todas = [];
     for (let pagina = 1; todas.length < CSV_MAX_SERVIDOR; pagina++) {
+      if (!ctx.vivo()) throw new DOMException('Rota trocada', 'AbortError');
       const d = await buscar(pagina);
       todas.push(...d.itens);
       if (!d.itens.length || todas.length >= d.total) break;
