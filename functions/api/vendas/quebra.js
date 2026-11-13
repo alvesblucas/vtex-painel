@@ -1,5 +1,6 @@
 // Top 10 por valor (por pedidos sem R$) + "outros", com comparação por chave.
 import { dadosAte, filtrosDaRequisicao, invalido, quebra, QUEBRAS } from '../../_lib/consultas.js';
+import { usaItens } from '../../_lib/filtros.js';
 import { exigirAba, semValores } from '../../_lib/permissoes.js';
 import { json } from '../../_lib/resposta.js';
 
@@ -26,5 +27,6 @@ export async function onRequestGet(context) {
   }));
   const resto = grupos.slice(TOP);
   const outros = { valor: somar(resto, 'valor'), pedidos: somar(resto, 'pedidos') };
-  return json(semValores({ por, itens, outros, dadosAte: await dadosAte(db, 'pedidos') }, verValores));
+  const porItens = usaItens(f) || por === 'marca' || por === 'categoria';
+  return json(semValores({ por, itens, outros, porItens, dadosAte: await dadosAte(db, 'pedidos') }, verValores));
 }

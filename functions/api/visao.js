@@ -1,6 +1,6 @@
 // Cartões das abas permitidas + alertas (coleta atrasada, queda de vendas de ontem). Alertas nunca trazem R$.
-import { clientes, filtrosDaRequisicao, hojeLocal, lerAgenda, pct, resumo } from '../_lib/consultas.js';
-import { somarDias } from '../_lib/filtros.js';
+import { clientes, dadosAte, filtrosDaRequisicao, hojeLocal, lerAgenda, pct, resumo } from '../_lib/consultas.js';
+import { LISTAS, somarDias } from '../_lib/filtros.js';
 import { exigirAba, semValores } from '../_lib/permissoes.js';
 import { json } from '../_lib/resposta.js';
 
@@ -26,12 +26,19 @@ async function alertasDeColeta(db, env, agora) {
   return alertas;
 }
 
-// Ontem x mesmo dia da semana anterior; sem R$ compara pedidos.
-async function alertaDeQueda(db, f, env, campo) {
-  const ontem = somarDias(hojeLocal(env), -1);
-  const a = await resumo(db, f, { de: ontem, ate: ontem });
+// Loja toda (ignora filtros da tela): ontem x mesmo dia da semana anterior; sem R$ compara pedidos.
+// Só quando ontem já foi coletado por inteiro (última coleta ok a partir da meia-noite local de hoje).
+const LOJA_TODA = Object.fromEntries(LISTAS.map((l) => [l, []]));
+
+async function alertaDeQueda(db, env, campo) {
+  const hoje = hojeLocal(env);
+  const ate = await dadosAte(db, 'pedidos');
+  const ateMs = ate ? Date.parse(ate) : NaN;
+  if (Number.isNaN(ateMs) || hojeLocal(env, ateMs) < hoje) return [];
+  const ontem = somarDias(hoje, -1);
+  const a = await resumo(db, LOJA_TODA, { de: ontem, ate: ontem });
   const semanaAntes = somarDias(ontem, -7);
-  const b = await resumo(db, f, { de: semanaAntes, ate: semanaAntes });
+  const b = await resumo(db, LOJA_TODA, { de: semanaAntes, ate: semanaAntes });
   const delta = pct(a[campo], b[campo]);
   if (delta === null || delta > QUEDA_ALERTA) return [];
   const nome = campo === 'valor' ? 'Vendas' : 'Pedidos';
@@ -52,7 +59,7 @@ export async function onRequestGet(context) {
     const atual = await resumo(db, f, f);
     const antes = cmp ? await resumo(db, f, cmp) : null;
     cartoes.vendas = { valor: atual.valor, pedidos: atual.pedidos, ticket: atual.ticket, delta: antes ? pct(atual[campo], antes[campo]) : null };
-    alertas.push(...(await alertaDeQueda(db, f, env, campo)));
+    alertas.push(...(await alertaDeQueda(db, env, campo)));
   }
   if (eu.abas.includes('clientes')) {
     const c = await clientes(db, f, f);

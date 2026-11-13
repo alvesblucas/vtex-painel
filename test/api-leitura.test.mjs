@@ -346,7 +346,8 @@ test('visão: gestão recebe cartões com delta', async () => {
   assert.equal(mkt.corpo.cartoes.vendas.delta, Math.round(((19 - 3) / 3) * 1000) / 10, 'sem R$: delta de pedidos');
 });
 
-test('visão: alertas de coleta atrasada e queda de vendas de ontem', async () => {
+// banco com 1 pedido ontem x 2 no mesmo dia da semana anterior (queda de 50 %)
+async function bancoQueda(quandoColeta) {
   const db = await criarD1Falso();
   const hoje = hojeLocal({});
   const menos = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) - n * 86400000).toISOString().slice(0, 10);
@@ -359,23 +360,83 @@ test('visão: alertas de coleta atrasada e queda de vendas de ontem', async () =
   ]);
   await db.prepare("INSERT INTO usuarios (email, nome, perfil, ajustes, admin, ativo) VALUES ('gestao@exemplo.com','Gê','gestao',NULL,0,1)").run();
   await db.prepare("INSERT INTO usuarios (email, nome, perfil, ajustes, admin, ativo) VALUES ('compras@exemplo.com','Cris','compras',NULL,0,1)").run();
-  const cincoHoras = new Date(Date.now() - 5 * 3600000).toISOString();
-  await db.prepare('INSERT INTO coletas (fonte, quando, ok, registros) VALUES (?,?,1,1)').bind('pedidos', cincoHoras).run();
+  await db.prepare("INSERT INTO usuarios (email, nome, perfil, ajustes, admin, ativo) VALUES ('mkt@exemplo.com','Mari','marketing','{\"ver_valores\":false}',0,1)").run();
+  if (quandoColeta) await db.prepare('INSERT INTO coletas (fonte, quando, ok, registros) VALUES (?,?,1,1)').bind('pedidos', quandoColeta).run();
+  return { db, hoje };
+}
+
+// meia-noite local (fuso -3) de hoje, em ISO UTC, deslocada em minutos
+const meiaNoiteLocal = (hoje, minutos) => new Date(Date.parse(`${hoje}T00:00:00Z`) + 3 * 3600000 + minutos * 60000).toISOString();
+
+test('visão: alertas de coleta atrasada ou ausente', async () => {
+  const { db } = await bancoQueda(new Date(Date.now() - 5 * 3600000).toISOString());
   const env = { AGENDA_JSON: JSON.stringify({ pedidos: { horasMax: 3 }, estoque: { horasMax: 24 } }) };
   const { corpo } = await pedir(db, '/api/visao', visao, { env });
-  const textos = corpo.alertas.map((a) => a.texto);
-  assert.equal(corpo.alertas.filter((a) => a.aba === 'visao' && a.nivel === 'aviso').length, 2, textos.join(' | '));
-  const queda = corpo.alertas.find((a) => a.aba === 'vendas');
-  assert.ok(queda, textos.join(' | '));
-  assert.match(queda.texto, /50/);
-  assert.ok(corpo.alertas.every((a) => !a.texto.includes('R$')));
-
-  // compras não tem aba vendas: só alertas de coleta
-  const c = await pedir(db, '/api/visao', visao, { email: 'compras@exemplo.com', env });
-  assert.ok(!c.corpo.alertas.some((a) => a.aba === 'vendas'));
-  // coleta recente e dentro do prazo: sem alerta
+  const coleta = corpo.alertas.filter((a) => a.aba === 'visao');
+  assert.equal(coleta.length, 2, JSON.stringify(corpo.alertas));
+  assert.ok(coleta.every((a) => a.nivel === 'aviso'));
+  assert.ok(coleta.some((a) => a.texto.includes('pedidos')) && coleta.some((a) => a.texto.includes('estoque')));
   const ok = await pedir(db, '/api/visao', visao, { env: { AGENDA_JSON: JSON.stringify({ pedidos: { horasMax: 6 } }) } });
   assert.ok(!ok.corpo.alertas.some((a) => a.aba === 'visao'));
+  const ruim = await pedir(db, '/api/visao', visao, { env: { AGENDA_JSON: '{x' } });
+  assert.equal(ruim.status, 200);
+});
+
+test('visão: queda de ontem com ontem já coletado (loja toda, sem filtros da tela)', async () => {
+  const { db, hoje } = await bancoQueda(null);
+  await db.prepare('INSERT INTO coletas (fonte, quando, ok, registros) VALUES (?,?,1,1)').bind('pedidos', meiaNoiteLocal(hoje, 1)).run();
+  const { corpo } = await pedir(db, '/api/visao', visao);
+  const queda = corpo.alertas.find((a) => a.aba === 'vendas');
+  assert.ok(queda, JSON.stringify(corpo.alertas));
+  assert.equal(queda.nivel, 'aviso');
+  assert.match(queda.texto, /^Vendas de ontem 50% abaixo/);
+  assert.ok(corpo.alertas.every((a) => !a.texto.includes('R$')));
+  // filtro da tela que zera tudo não muda o alerta
+  const filtrado = await pedir(db, '/api/visao?origem=Inexistente', visao);
+  assert.ok(filtrado.corpo.alertas.some((a) => a.aba === 'vendas'));
+  // sem R$: compara pedidos
+  const mkt = await pedir(db, '/api/visao', visao, { email: 'mkt@exemplo.com' });
+  assert.match(mkt.corpo.alertas.find((a) => a.aba === 'vendas').texto, /^Pedidos de ontem 50% abaixo/);
+  // compras não tem aba vendas
+  const c = await pedir(db, '/api/visao', visao, { email: 'compras@exemplo.com' });
+  assert.ok(!c.corpo.alertas.some((a) => a.aba === 'vendas'));
+});
+
+test('visão: sem alerta de queda se ontem não foi coletado por inteiro', async () => {
+  const antes = await bancoQueda(null);
+  await antes.db.prepare('INSERT INTO coletas (fonte, quando, ok, registros) VALUES (?,?,1,1)').bind('pedidos', meiaNoiteLocal(antes.hoje, -1)).run();
+  const r = await pedir(antes.db, '/api/visao', visao);
+  assert.ok(!r.corpo.alertas.some((a) => a.aba === 'vendas'), JSON.stringify(r.corpo.alertas));
+  const nunca = await bancoQueda(null);
+  assert.ok(!(await pedir(nunca.db, '/api/visao', visao)).corpo.alertas.some((a) => a.aba === 'vendas'));
+  const falhou = await bancoQueda(null);
+  await falhou.db.prepare('INSERT INTO coletas (fonte, quando, ok, registros) VALUES (?,?,0,0)').bind('pedidos', meiaNoiteLocal(falhou.hoje, 30)).run();
+  assert.ok(!(await pedir(falhou.db, '/api/visao', visao)).corpo.alertas.some((a) => a.aba === 'vendas'));
+});
+
+test('403 sem-permissao: visão, série, quebra e produtos', async () => {
+  const db = await banco();
+  const casos = [
+    ['/api/visao', visao, 'nada@exemplo.com'],
+    [`/api/vendas/serie?${PERIODO}`, serie, 'compras@exemplo.com'],
+    [`/api/vendas/quebra?${PERIODO}&por=origem`, quebra, 'compras@exemplo.com'],
+    [`/api/vendas/produtos?${PERIODO}`, produtos, 'compras@exemplo.com'],
+  ];
+  for (const [rota, handler, email] of casos) {
+    const r = await pedir(db, rota, handler, { email });
+    assert.equal(r.status, 403, rota);
+    assert.equal(r.corpo.erro, 'sem-permissao', rota);
+  }
+});
+
+test('porItens em série e quebra', async () => {
+  const db = await banco();
+  assert.equal((await pedir(db, `/api/vendas/serie?${PERIODO}`, serie)).corpo.porItens, false);
+  assert.equal((await pedir(db, `/api/vendas/serie?${PERIODO}&categoria=Luvas`, serie)).corpo.porItens, true);
+  assert.equal((await pedir(db, `/api/vendas/quebra?${PERIODO}&por=origem`, quebra)).corpo.porItens, false);
+  assert.equal((await pedir(db, `/api/vendas/quebra?${PERIODO}&por=origem&marca=A`, quebra)).corpo.porItens, true);
+  assert.equal((await pedir(db, `/api/vendas/quebra?${PERIODO}&por=marca`, quebra)).corpo.porItens, true);
+  assert.equal((await pedir(db, `/api/vendas/quebra?${PERIODO}&por=categoria`, quebra)).corpo.porItens, true);
 });
 
 // ---------- /api/opcoes e /api/eu ----------

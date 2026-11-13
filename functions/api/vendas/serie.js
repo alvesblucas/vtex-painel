@@ -1,5 +1,6 @@
 // Um ponto por dia do período; comparação alinhada por posição (ponto i = dia i da comparação).
 import { dadosAte, filtrosDaRequisicao, serie } from '../../_lib/consultas.js';
+import { usaItens } from '../../_lib/filtros.js';
 import { exigirAba, semValores } from '../../_lib/permissoes.js';
 import { json } from '../../_lib/resposta.js';
 
@@ -13,5 +14,5 @@ export async function onRequestGet(context) {
     const c = antes[i];
     return { ...p, cmpDia: c?.dia ?? null, cmpValor: c ? c.valor : null, cmpPedidos: c ? c.pedidos : null };
   });
-  return json(semValores({ pontos, dadosAte: await dadosAte(db, 'pedidos') }, context.data.eu.verValores));
+  return json(semValores({ pontos, porItens: usaItens(f), dadosAte: await dadosAte(db, 'pedidos') }, context.data.eu.verValores));
 }
