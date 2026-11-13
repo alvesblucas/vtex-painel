@@ -130,13 +130,20 @@ function montarShell() {
   avisoDados(el.avisos, eu.coletas ?? [], eu.agenda ?? {}, { fusoHoras: fuso() });
 }
 
+// Remontar a barra fecha um popover aberto: só remonta quando algo que ela mostra mudou.
+let chaveBarra = null;
+
 function desenharBarra() {
   if (!aplicaveisAtuais) {
+    chaveBarra = null;
     el.filtros.hidden = true;
     el.filtros._desmontar?.();
     el.filtros.replaceChildren();
     return;
   }
+  const chave = [montarHash('', rota.filtros), [...aplicaveisAtuais].sort().join(','), hoje(), opcoes ? 1 : 0].join('|');
+  if (chave === chaveBarra) return;
+  chaveBarra = chave;
   el.filtros.hidden = false;
   montarBarra(el.filtros, {
     filtros: rota.filtros,
@@ -193,8 +200,10 @@ async function rotear() {
     rotulo: rotuloDe(rota.aba),
     filtros: rota.filtros,
     opcoes,
-    api,
+    // Chamadas da view já levam o sinal da rota: resposta de rota antiga é abortada e nunca pinta.
+    api: (caminho, filtros, opcoesApi) => api(caminho, filtros, { signal: meu.signal, ...opcoesApi }),
     signal: meu.signal,
+    vivo: () => !meu.signal.aborted,
     aplicarFiltro(chave, valor) {
       if (!LISTAS.includes(chave) || rota.filtros[chave].includes(valor)) return;
       const novo = comLista(rota.filtros, chave, [...rota.filtros[chave], valor], opcoes?.cidades);

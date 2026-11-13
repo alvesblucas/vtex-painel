@@ -141,11 +141,18 @@ function formatoDe(col) {
 
 const normalizar = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
+// Texto que começa com = + - @ TAB ou CR vira fórmula no Excel: prefixa ' (só em valores que não são números).
+const PERIGO_CSV = /^[=+\-@\t\r]/;
+export const celulaSegura = (bruto, texto) => (typeof bruto !== 'number' && PERIGO_CSV.test(texto) ? `'${texto}` : texto);
+
 // CSV para Excel: separador ;, BOM, CRLF, centavos → 1234,56.
 export function csvTexto(colunas, linhas) {
   const cel = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const cab = colunas.map((c) => cel(c.titulo)).join(';');
-  const corpo = linhas.map((l) => colunas.map((c) => cel(formatoDe(c).csv(l[c.chave]))).join(';'));
+  const cab = colunas.map((c) => cel(celulaSegura(c.titulo, String(c.titulo)))).join(';');
+  const corpo = linhas.map((l) => colunas.map((c) => {
+    const bruto = l[c.chave];
+    return cel(celulaSegura(bruto, formatoDe(c).csv(bruto)));
+  }).join(';'));
   return `﻿${[cab, ...corpo].join('\r\n')}`;
 }
 
@@ -159,23 +166,54 @@ export function baixarCsv(nome, texto) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+export const CSV_MAX_SERVIDOR = 5000;
+const ESPERA_BUSCA_MS = 300;
 let idTabela = 0;
 
-// Tabela com busca, ordenação por coluna, paginação e CSV (do conjunto filtrado e ordenado inteiro).
-export function tabela(el, { colunas, linhas, porPagina = 25, busca = false, csv = '', vazioTexto = 'Nada para mostrar.' }) {
+/**
+ * Tabela com busca, ordenação, paginação e CSV.
+ * Modo cliente (padrão): recebe todas as linhas; busca/ordem/página locais; CSV do conjunto filtrado e ordenado.
+ * Modo servidor: `servidor: { total, pagina, porPagina, ordem?: {chave, dir}, busca?, aoPagina(n), aoOrdenar(chave, dir), aoBuscar(texto) }`
+ *   mostra só a página recebida; navegação chama os ganchos (busca com espera de 300 ms); `csvTodos: async () => linhas`
+ *   gera o CSV (até 5.000 linhas; quem chama busca as páginas).
+ * Devolve `{ atualizar({ linhas, total, pagina }) }` para trocar a página sem perder busca, ordem e foco.
+ */
+export function tabela(el, { colunas, linhas, porPagina = 25, busca = false, csv = '', vazioTexto = 'Nada para mostrar.', servidor = null, csvTodos = null }) {
   pronto(el);
   const id = `tb${++idTabela}`;
-  const st = { termo: '', ordem: null, desc: true, pagina: 1 };
+  const srv = servidor ? { ...servidor } : null;
+  const tamanho = srv?.porPagina ?? porPagina;
+  const st = {
+    termo: srv?.busca ?? '',
+    ordem: srv?.ordem?.chave ?? null,
+    desc: srv?.ordem ? srv.ordem.dir !== 'asc' : true,
+    pagina: srv?.pagina ?? 1,
+  };
+  let dados = linhas ?? [];
+  const rotuloCsv = srv ? `Baixar CSV (até ${int(CSV_MAX_SERVIDOR)})` : 'Baixar CSV';
   el.innerHTML = `${busca || csv ? `<div class="tabela-barra">
       ${busca ? `<label class="campo-busca"><span class="sr">Buscar na tabela</span>
-        <input class="input" type="search" placeholder="Buscar" autocomplete="off" id="${id}-busca"></label>` : '<span></span>'}
-      ${csv ? '<button type="button" class="btn" data-csv>Baixar CSV</button>' : ''}
+        <input class="input" type="search" placeholder="Buscar" autocomplete="off" id="${id}-busca" value="${esc(st.termo)}"></label>` : '<span></span>'}
+      ${csv ? `<button type="button" class="btn" data-csv>${rotuloCsv}</button>` : ''}
     </div>` : ''}
     <div class="tabela-wrap"><table><thead><tr></tr></thead><tbody></tbody></table></div>
     <div class="tabela-pe"></div>`;
   const tr = el.querySelector('thead tr');
   const tbody = el.querySelector('tbody');
   const pe = el.querySelector('.tabela-pe');
+  const wrap = el.querySelector('.tabela-wrap');
+  const esperando = () => {
+    wrap.classList.add('recarregando');
+    wrap.setAttribute('aria-busy', 'true');
+  };
+
+  function cabecalho() {
+    [...tr.children].forEach((th, i) => {
+      const c = colunas[i];
+      th.setAttribute('aria-sort', st.ordem === c.chave ? (st.desc ? 'descending' : 'ascending') : 'none');
+      th.querySelector('button').dataset.seta = st.ordem === c.chave ? (st.desc ? '↓' : '↑') : '';
+    });
+  }
 
   colunas.forEach((c) => {
     const th = document.createElement('th');
@@ -188,14 +226,17 @@ export function tabela(el, { colunas, linhas, porPagina = 25, busca = false, csv
       st.desc = st.ordem === c.chave ? !st.desc : formatoDe(c).num;
       st.ordem = c.chave;
       st.pagina = 1;
-      desenhar();
+      if (!srv) return desenhar();
+      cabecalho();
+      esperando();
+      srv.aoOrdenar?.(c.chave, st.desc ? 'desc' : 'asc');
     });
     th.append(b);
     tr.append(th);
   });
 
   function filtradas() {
-    let ls = linhas;
+    let ls = dados;
     if (st.termo) {
       const t = normalizar(st.termo);
       ls = ls.filter((l) => colunas.some((c) => normalizar(formatoDe(c).tela(l[c.chave])).includes(t)));
@@ -215,18 +256,13 @@ export function tabela(el, { colunas, linhas, porPagina = 25, busca = false, csv
     return ls;
   }
 
-  function desenhar() {
-    const ls = filtradas();
-    const paginas = Math.max(1, Math.ceil(ls.length / porPagina));
-    st.pagina = Math.min(st.pagina, paginas);
-    const ini = (st.pagina - 1) * porPagina;
-    [...tr.children].forEach((th, i) => {
-      const c = colunas[i];
-      th.setAttribute('aria-sort', st.ordem === c.chave ? (st.desc ? 'descending' : 'ascending') : 'none');
-      th.querySelector('button').dataset.seta = st.ordem === c.chave ? (st.desc ? '↓' : '↑') : '';
-    });
+  // visiveis = linhas desta página; total = linhas do conjunto inteiro; ini = índice da 1ª visível.
+  function pintar(visiveis, total, ini) {
+    wrap.classList.remove('recarregando');
+    wrap.removeAttribute('aria-busy');
+    cabecalho();
     tbody.replaceChildren();
-    if (!ls.length) {
+    if (!visiveis.length) {
       const td = document.createElement('td');
       td.colSpan = colunas.length;
       td.className = 'tabela-vazia';
@@ -235,7 +271,7 @@ export function tabela(el, { colunas, linhas, porPagina = 25, busca = false, csv
       vaziaTr.append(td);
       tbody.append(vaziaTr);
     }
-    for (const l of ls.slice(ini, ini + porPagina)) {
+    for (const l of visiveis) {
       const linha = document.createElement('tr');
       for (const c of colunas) {
         const f = formatoDe(c);
@@ -246,24 +282,67 @@ export function tabela(el, { colunas, linhas, porPagina = 25, busca = false, csv
       }
       tbody.append(linha);
     }
-    pe.innerHTML = ls.length > porPagina
-      ? `<span class="num muted">${int(ini + 1)}–${int(Math.min(ini + porPagina, ls.length))} de ${int(ls.length)}</span>
-        <span class="paginas"><button type="button" class="btn" data-pg="-1" ${st.pagina === 1 ? 'disabled' : ''} aria-label="Página anterior">‹</button>
-        <button type="button" class="btn" data-pg="1" ${st.pagina === paginas ? 'disabled' : ''} aria-label="Próxima página">›</button></span>`
-      : `<span class="num muted">${int(ls.length)} ${ls.length === 1 ? 'linha' : 'linhas'}</span>`;
+    const paginas = Math.max(1, Math.ceil(total / tamanho));
+    pe.innerHTML = total > tamanho
+      ? `<span class="num muted">${int(ini + 1)}–${int(Math.min(ini + visiveis.length, total))} de ${int(total)}</span>
+        <span class="paginas"><button type="button" class="btn" data-pg="-1" ${st.pagina <= 1 ? 'disabled' : ''} aria-label="Página anterior">‹</button>
+        <button type="button" class="btn" data-pg="1" ${st.pagina >= paginas ? 'disabled' : ''} aria-label="Próxima página">›</button></span>`
+      : `<span class="num muted">${int(total)} ${total === 1 ? 'linha' : 'linhas'}</span>`;
+  }
+
+  function desenhar() {
+    if (srv) return pintar(dados, srv.total ?? dados.length, (st.pagina - 1) * tamanho);
+    const ls = filtradas();
+    st.pagina = Math.min(st.pagina, Math.max(1, Math.ceil(ls.length / tamanho)));
+    const ini = (st.pagina - 1) * tamanho;
+    return pintar(ls.slice(ini, ini + tamanho), ls.length, ini);
   }
 
   pe.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-pg]');
     if (!b) return;
     st.pagina += Number(b.dataset.pg);
-    desenhar();
+    if (!srv) return desenhar();
+    esperando();
+    srv.aoPagina?.(st.pagina);
   });
+
+  let espera = null;
   el.querySelector('input[type=search]')?.addEventListener('input', (ev) => {
     st.termo = ev.target.value.trim();
     st.pagina = 1;
-    desenhar();
+    if (!srv) return desenhar();
+    clearTimeout(espera);
+    espera = setTimeout(() => {
+      esperando();
+      srv.aoBuscar?.(st.termo);
+    }, ESPERA_BUSCA_MS);
   });
-  el.querySelector('[data-csv]')?.addEventListener('click', () => baixarCsv(csv, csvTexto(colunas, filtradas())));
+
+  el.querySelector('[data-csv]')?.addEventListener('click', async (ev) => {
+    const b = ev.currentTarget;
+    if (!srv) return baixarCsv(csv, csvTexto(colunas, filtradas()));
+    if (typeof csvTodos !== 'function') return baixarCsv(csv, csvTexto(colunas, dados));
+    b.disabled = true;
+    b.textContent = 'Gerando CSV…';
+    try {
+      const todas = await csvTodos();
+      baixarCsv(csv, csvTexto(colunas, (todas ?? []).slice(0, CSV_MAX_SERVIDOR)));
+      b.textContent = rotuloCsv;
+    } catch {
+      b.textContent = 'CSV falhou — tentar de novo';
+    } finally {
+      b.disabled = false;
+    }
+  });
+
   desenhar();
+  return {
+    atualizar({ linhas: novas, total, pagina } = {}) {
+      if (novas) dados = novas;
+      if (srv && total != null) srv.total = total;
+      if (pagina != null) st.pagina = pagina;
+      desenhar();
+    },
+  };
 }
