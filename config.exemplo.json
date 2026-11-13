@@ -1,0 +1,15 @@
+{
+  "loja": { "nome": "Minha Loja", "logo": "" },
+  "fusoHoras": -3,
+  "faturamento": { "comFrete": true, "statusExcluidos": ["canceled"] },
+  "canalSite": "1",
+  "afiliados": { "GSM": "Site" },
+  "origens": [
+    ["Google Ads", "gclid|utm_source=google|utm_medium=cpc", "i"],
+    ["E-mail", "utm_medium=email|utm_source=newsletter", "i"],
+    ["Instagram", "instagram|utm_source=ig", "i"]
+  ],
+  "abas": ["visao", "vendas", "clientes"],
+  "agenda": { "pedidos": { "horasMax": 3 } },
+  "dominioPermitido": "exemplo.com"
+}
