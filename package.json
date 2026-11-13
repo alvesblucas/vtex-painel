@@ -1,0 +1,18 @@
+{
+  "name": "vtex-painel",
+  "version": "0.1.0",
+  "description": "Painel de vendas para lojas VTEX em Cloudflare Pages + D1",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "test": "node --test --disable-warning=ExperimentalWarning test/*.test.mjs",
+    "dev": "wrangler pages dev public"
+  },
+  "devDependencies": {
+    "wrangler": "4.162.0"
+  }
+}
