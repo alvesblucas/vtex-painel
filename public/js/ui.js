@@ -172,6 +172,7 @@ let idTabela = 0;
 
 /**
  * Tabela com busca, ordenação, paginação e CSV.
+ * Colunas: { chave, titulo, formato?, alinhar?, ordenavel? (false = cabeçalho sem ordenação), soDesc? (só ordem decrescente) }.
  * Modo cliente (padrão): recebe todas as linhas; busca/ordem/página locais; CSV do conjunto filtrado e ordenado.
  * Modo servidor: `servidor: { total, pagina, porPagina, ordem?: {chave, dir}, busca?, aoPagina(n), aoOrdenar(chave, dir), aoBuscar(texto) }`
  *   mostra só a página recebida; navegação chama os ganchos (busca com espera de 300 ms); `csvTodos: async () => linhas`
@@ -211,7 +212,8 @@ export function tabela(el, { colunas, linhas, porPagina = 25, busca = false, csv
     [...tr.children].forEach((th, i) => {
       const c = colunas[i];
       th.setAttribute('aria-sort', st.ordem === c.chave ? (st.desc ? 'descending' : 'ascending') : 'none');
-      th.querySelector('button').dataset.seta = st.ordem === c.chave ? (st.desc ? '↓' : '↑') : '';
+      const b = th.querySelector('button');
+      if (b) b.dataset.seta = st.ordem === c.chave ? (st.desc ? '↓' : '↑') : '';
     });
   }
 
@@ -219,11 +221,20 @@ export function tabela(el, { colunas, linhas, porPagina = 25, busca = false, csv
     const th = document.createElement('th');
     th.scope = 'col';
     if (formatoDe(c).num || c.alinhar === 'direita') th.className = 'r';
+    if (c.ordenavel === false) {
+      const s = document.createElement('span');
+      s.className = 'th-fixo';
+      s.textContent = c.titulo;
+      th.append(s);
+      tr.append(th);
+      return;
+    }
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = c.titulo;
     b.addEventListener('click', () => {
-      st.desc = st.ordem === c.chave ? !st.desc : formatoDe(c).num;
+      if (c.soDesc && st.ordem === c.chave && st.desc) return; // só decrescente: clicar de novo não muda nada
+      st.desc = c.soDesc ? true : st.ordem === c.chave ? !st.desc : formatoDe(c).num;
       st.ordem = c.chave;
       st.pagina = 1;
       if (!srv) return desenhar();

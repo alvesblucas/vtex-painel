@@ -1,9 +1,11 @@
-// Quem sou eu: permissão efetiva, loja e última coleta de cada fonte (inativo recebe só o básico).
-import { coletas } from '../_lib/consultas.js';
+// Quem sou eu: permissão efetiva, loja, fuso, agenda de coleta e última coleta de cada fonte
+// (inativo recebe só o básico).
+import { coletas, fusoHoras, lerAgenda } from '../_lib/consultas.js';
 import { semValores } from '../_lib/permissoes.js';
 import { json } from '../_lib/resposta.js';
 
 export async function onRequestGet(context) {
+  const { env } = context;
   const eu = context.data.eu;
   const dados = {
     email: eu.email,
@@ -14,8 +16,10 @@ export async function onRequestGet(context) {
     verValores: eu.verValores,
     admin: eu.admin,
     superAdmin: eu.superAdmin,
-    loja: { nome: context.env.LOJA_NOME || 'Painel' },
-    coletas: eu.ativo ? await coletas(context.env.DB) : [],
+    loja: { nome: env.LOJA_NOME || 'Painel' },
+    fusoHoras: fusoHoras(env),
+    agenda: eu.ativo ? lerAgenda(env) : {},
+    coletas: eu.ativo ? await coletas(env.DB) : [],
   };
   return json(semValores(dados, eu.verValores));
 }

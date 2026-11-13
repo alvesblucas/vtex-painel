@@ -15,6 +15,9 @@
   --accent: #3fb6ff;
   --serie: #2a9ae6;
   --serie-ref: #c47f3e;
+  /* novos × recorrentes (categórico, 2 cores): validado no modo escuro contra #101218 */
+  --cat-novo: #2a9ae6;
+  --cat-rec: #d55181;
   --ok: #4fd6a0;
   --warn: #f5b74f;
   --bad: #ff6b81;
@@ -324,3 +327,55 @@ button.barra-linha:hover .barra { filter: brightness(1.15); }
   .card { padding: 16px; }
   .cartao-valor { font-size: 24px; line-height: 30px; }
 }
+
+/* ---------- views (visão geral, vendas, clientes) ---------- */
+.view { display: flex; flex-direction: column; gap: var(--gap); }
+.secao { min-width: 0; }
+.aviso-info {
+  display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-radius: 8px; font-size: 13px;
+  color: var(--text-2); background: rgba(63, 182, 255, .07); border: 1px solid rgba(63, 182, 255, .25);
+}
+.aviso-info > span { color: var(--accent); }
+.estado-faixa { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.estado-faixa strong { font-size: 15px; }
+.segmentos { display: inline-flex; padding: 2px; border-radius: 8px; border: 1px solid var(--control); background: var(--ground); }
+.segmento { height: 28px; padding: 0 10px; border-radius: 6px; font-size: 12px; color: var(--muted); }
+.segmento:hover { color: var(--text); }
+.segmento[aria-pressed="true"] { background: var(--raised); color: var(--text); }
+.quebra-pe { font-size: 12px; padding: 8px 6px 0; }
+.quebra-pe:empty { display: none; }
+.th-fixo { display: block; padding: 8px 10px; }
+
+.alertas, .atalhos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.alerta, .atalho {
+  display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 8px; border-radius: 8px; text-decoration: none; color: var(--text-2);
+}
+a.alerta:hover, .atalho:hover { background: var(--raised); color: var(--text); }
+.alerta-texto { flex: 1; min-width: 0; }
+.atalho-nome { color: var(--text); font-weight: 500; }
+.atalho .muted, .atalho .selo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.atalho .selo { flex: none; }
+.atalho-seta { margin-left: auto; color: var(--muted); }
+.tudo-certo { display: flex; align-items: center; gap: 10px; color: var(--text-2); padding: 6px 8px; }
+
+.pilha { position: absolute; left: 0; top: 0; bottom: 0; display: flex; gap: 2px; min-width: 4px; }
+.seg-novo, .seg-rec { flex-basis: 0; min-width: 0; }
+.seg-novo { background: var(--cat-novo); border-radius: 0; }
+.seg-rec { background: var(--cat-rec); border-radius: 0 4px 4px 0; }
+.seg-novo:only-child, .seg-novo:last-child { border-radius: 0 4px 4px 0; }
+button.barra-linha:hover .pilha { filter: brightness(1.15); }
+.chave-novo, .chave-rec { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.chave-novo { background: var(--cat-novo); } .chave-rec { background: var(--cat-rec); }
+.card-head .legenda { margin-bottom: 0; }
+
+.sem-acesso-dados { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 13px; }
+.sem-acesso-dados dt { color: var(--muted); }
+.sem-acesso-dados dd { margin: 0; overflow-wrap: anywhere; }
+.topo-alinhado { align-items: start; }
+@media (max-width: 600px) {
+  .cartoes .s3 { grid-column: span 6; }
+  .cartoes .card { padding: 14px; }
+  .cartoes .cartao-valor { font-size: 19px; line-height: 26px; }
+  .cartoes .cartao-sub { font-size: 12px; }
+}
+.cartao-central:focus-visible { outline: none; }

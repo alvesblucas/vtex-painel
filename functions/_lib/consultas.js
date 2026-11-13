@@ -7,11 +7,15 @@ const FUSO_PADRAO = -3;
 const CANAL_SITE = 'Site';
 const SEM_CHAVE = '(não informado)';
 
-export function hojeLocal(env, agora = Date.now()) {
+// Fuso da loja em horas (env.FUSO_HORAS); vazio ou inválido = -3.
+export function fusoHoras(env) {
   const bruto = env?.FUSO_HORAS;
   const h = bruto === undefined || bruto === null || bruto === '' ? FUSO_PADRAO : Number(bruto);
-  const fuso = Number.isFinite(h) ? h : FUSO_PADRAO;
-  return new Date(agora + fuso * HORA_MS).toISOString().slice(0, 10);
+  return Number.isFinite(h) ? h : FUSO_PADRAO;
+}
+
+export function hojeLocal(env, agora = Date.now()) {
+  return new Date(agora + fusoHoras(env) * HORA_MS).toISOString().slice(0, 10);
 }
 
 export async function dadosAte(db, fonte) {

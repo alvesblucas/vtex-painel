@@ -1,0 +1,27 @@
+# Copie para wrangler.toml (não versionado) e preencha. Nada de valores reais neste arquivo.
+#   cp wrangler.exemplo.toml wrangler.toml
+name = "minhaloja-painel"
+pages_build_output_dir = "public"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"                      # nome usado pelas Functions (env.DB)
+database_name = "painel"
+database_id = "00000000-0000-0000-0000-000000000000"   # saída de: npx wrangler d1 create painel
+migrations_dir = "migrations"
+
+[vars]
+LOJA_NOME = "Minha Loja"            # nome no topo do painel
+FUSO_HORAS = "-3"                   # fuso da loja em horas (datas AAAA-MM-DD locais)
+SUPER_ADMIN = "voce@exemplo.com"    # sempre vê tudo e administra usuários
+AGENDA_JSON = '{"pedidos":{"horasMax":3}}'   # atraso máximo por fonte antes do aviso amarelo
+# Login: Cloudflare Access (equipe e AUD da aplicação)
+ACCESS_TEAM = "minhaequipe"
+ACCESS_AUD = "aud-da-aplicacao-no-access"
+
+# Desenvolvimento local: crie .dev.vars (não versionado) com, por exemplo:
+#   DEV_EMAIL=voce@exemplo.com      (só vale em localhost; dispensa o Access)
+#   SUPER_ADMIN=voce@exemplo.com
+#   LOJA_NOME=Minha Loja
+#   FUSO_HORAS=-3
+#   AGENDA_JSON={"pedidos":{"horasMax":3}}

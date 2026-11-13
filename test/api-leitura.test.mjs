@@ -485,11 +485,33 @@ test('eu: dados do usuário, loja e coletas', async () => {
   assert.ok(corpo.abas.includes('vendas'));
   assert.deepEqual(corpo.loja, { nome: 'Minha Loja' });
   assert.deepEqual(corpo.coletas, [{ fonte: 'pedidos', quando: '2026-03-08T03:00:00.000Z', ok: true }]);
+  assert.equal(corpo.fusoHoras, -3);
+  assert.deepEqual(corpo.agenda, {});
   const padrao = await pedir(db, '/api/eu', eu, { email: 'fora@exemplo.com' });
   assert.equal(padrao.status, 200);
   assert.equal(padrao.corpo.ativo, false);
   assert.deepEqual(padrao.corpo.loja, { nome: 'Painel' });
   assert.deepEqual(padrao.corpo.coletas, []);
+  assert.equal(padrao.corpo.fusoHoras, -3);
+});
+
+test('eu: agenda e fuso vêm do ambiente (R16); inválidos caem no padrão; inativo não recebe agenda', async () => {
+  const db = await banco();
+  const agenda = { pedidos: { horasMax: 3 }, estoque: { horasMax: 24 } };
+  const env = { AGENDA_JSON: JSON.stringify(agenda), FUSO_HORAS: '-4' };
+  const { corpo } = await pedir(db, '/api/eu', eu, { env });
+  assert.deepEqual(corpo.agenda, agenda);
+  assert.equal(corpo.fusoHoras, -4);
+  const zero = await pedir(db, '/api/eu', eu, { env: { FUSO_HORAS: '0' } });
+  assert.equal(zero.corpo.fusoHoras, 0);
+  for (const ruim of [{ AGENDA_JSON: '{x', FUSO_HORAS: 'x' }, { AGENDA_JSON: '[1]', FUSO_HORAS: '' }]) {
+    const r = await pedir(db, '/api/eu', eu, { env: ruim });
+    assert.deepEqual(r.corpo.agenda, {});
+    assert.equal(r.corpo.fusoHoras, -3);
+  }
+  const fora = await pedir(db, '/api/eu', eu, { email: 'fora@exemplo.com', env });
+  assert.deepEqual(fora.corpo.agenda, {});
+  assert.equal(fora.corpo.fusoHoras, -4);
 });
 
 // ---------- R10: vazamento de valores ----------
