@@ -76,3 +76,10 @@ export async function carregarEu(db, email, env) {
 export function limparCacheUsuarios() {
   cache.clear();
 }
+
+// Defesa em profundidade: cada handler de /api/admin chama, além do middleware.
+export function exigirAdmin(context) {
+  if (context?.data?.eu?.admin !== true) {
+    throw new ErroHttp(403, 'sem-permissao', 'Somente administradores.');
+  }
+}
