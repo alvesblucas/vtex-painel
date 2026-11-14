@@ -223,7 +223,8 @@ async function rotear() {
   };
 
   // Troca de aba: título, menu e #conteudo (já no carregando) mudam numa View Transition.
-  // A callback é síncrona: a transição captura o carregando e nunca espera a API.
+  // A callback é síncrona e nunca espera a API: a transição captura a tela nova já montada, em geral
+  // com o esqueleto da view (ou o carregando genérico, se o módulo da aba ainda não chegou).
   // Se o módulo da aba já está carregado e tem esqueleto(), a tela nova nasce com a estrutura
   // da view (e os view-transition-name dos KPIs): é isso que faz o morph entre as abas acontecer.
   let comEsqueleto = false;

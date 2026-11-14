@@ -122,3 +122,11 @@ test('cartaoHtml segue a mockup: rótulo, valor e a variação abaixo do valor',
   assert.match(html, /<div class="cartao-pe">.*<span class="cartao-sub">vs anterior<\/span><\/div>/s);
   assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7' }), /cartao-pe/);
 });
+
+test('cartaoHtml: valor longo nunca some calado; o title guarda o valor inteiro', async () => {
+  const { cartaoHtml } = await import('../public/js/ui.js');
+  const html = cartaoHtml({ rotulo: 'Faturamento', valor: 'R$ 12.345.678.901,23' });
+  assert.ok(html.includes('class="cartao-valor num" title="R$ 12.345.678.901,23">'), html);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: null }), /title=/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '—' }), /title=/);
+});
