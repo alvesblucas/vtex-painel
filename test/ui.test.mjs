@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { brl, brlK, csvTexto, delta, deltaPct, esc, int, pct } from '../public/js/ui.js';
+import { brl, brlK, csvTexto, dadosAte, delta, deltaPct, esc, iniciais, int, pct } from '../public/js/ui.js';
 import { escala } from '../public/js/graficos.js';
 
 const NBSP = /\u00a0/g;
@@ -180,4 +180,28 @@ test('brlK com ref: a unidade vem do valor final, os intermediários não trocam
     cartao(b.el, { rotulo: 'Faturamento', valor: brlK(935_506), contagem: 'teste-fat', numero: 935_506, formatar: brlK });
     assert.equal(limpo(b.valorEl.textContent), 'R$ 18.900,00', 'ponto de partida já na unidade do valor final');
   });
+});
+
+test('iniciais: do nome (primeira e última palavra) ou do e-mail', () => {
+  assert.equal(iniciais('Maria Souza', 'm@x.com'), 'MS');
+  assert.equal(iniciais('Maria da Silva Souza', 'm@x.com'), 'MS');
+  assert.equal(iniciais('', 'admin@exemplo.com'), 'AD');
+  assert.equal(iniciais(undefined, 'joao.lima@exemplo.com'), 'JL');
+  assert.equal(iniciais('  ', 'x@exemplo.com'), 'X');
+  assert.equal(iniciais('Ângela', 'a@x.com'), 'ÂN');
+  assert.equal(iniciais('', ''), '?');
+});
+
+test('dadosAte: dia (dd/mm, fuso da loja) da coleta ok mais antiga entre as fontes', () => {
+  const coletas = [
+    { fonte: 'pedidos', quando: '2026-11-14T02:30:00Z', ok: 1 }, // 13/11 23:30 em UTC−3
+    { fonte: 'clientes', quando: '2026-11-14T12:00:00Z', ok: 1 },
+    { fonte: 'estoque', quando: '2026-11-10T12:00:00Z', ok: 0 }, // falha: não define a data
+  ];
+  assert.equal(dadosAte(coletas, -3), '13/11');
+  assert.equal(dadosAte(coletas, 0), '14/11');
+  assert.equal(dadosAte([{ fonte: 'pedidos', quando: '2026-11-14T02:30:00Z', ok: 0 }]), '');
+  assert.equal(dadosAte([{ fonte: 'pedidos', quando: 'lixo', ok: 1 }]), '');
+  assert.equal(dadosAte([]), '');
+  assert.equal(dadosAte(undefined), '');
 });

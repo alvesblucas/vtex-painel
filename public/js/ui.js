@@ -129,6 +129,23 @@ export function cartao(el, opcoes) {
   contar(valorEl, numero, (v) => formatar(v, numero), Number.isFinite(de) ? { de } : {});
 }
 
+// Iniciais do avatar: 1ª e última palavra do nome; sem nome, a parte do e-mail antes do @
+// (dividida em . _ - +, senão as duas primeiras letras).
+export function iniciais(nome, email) {
+  const letras = (partes) => (partes.length > 1 ? partes[0][0] + partes.at(-1)[0] : [...(partes[0] ?? '')].slice(0, 2).join(''));
+  const doNome = String(nome ?? '').trim().split(/\s+/).filter(Boolean);
+  const doEmail = String(email ?? '').split('@')[0].split(/[._+-]+/).filter(Boolean);
+  return (letras(doNome.length ? doNome : doEmail) || '?').toUpperCase();
+}
+
+// "Dados até": dia (dd/mm, no fuso da loja) da coleta bem-sucedida mais antiga entre as fontes —
+// até ali todas as fontes estão completas. Sem coleta ok, ''. Mesmo dado do aviso de coleta (avisoDados).
+export function dadosAte(coletas = [], fusoHoras = -3) {
+  const ms = (coletas ?? []).filter((c) => c?.ok).map((c) => Date.parse(c.quando ?? '')).filter(Number.isFinite);
+  if (!ms.length) return '';
+  return dm(new Date(Math.min(...ms) + fusoHoras * 3600000).toISOString());
+}
+
 // Aviso amarelo quando a fonte está atrasada em relação à agenda ({fonte: {horasMax}}) ou a última coleta falhou.
 export function avisoDados(el, coletas = [], agenda = {}, { agora = Date.now(), fusoHoras = -3 } = {}) {
   const avisos = [];

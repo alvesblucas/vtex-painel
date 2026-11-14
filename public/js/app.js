@@ -3,13 +3,21 @@ import { api } from './api.js';
 import { montarBarra } from './barra-filtros.js';
 import { trocarTela } from './movimento.js';
 import { LISTAS, ROTULOS_ABAS, comLista, hojeLocal, lerHash, montarHash } from './estado.js';
-import { avisoDados, carregando, erroCartao, esc, pronto, rodapeHtml } from './ui.js';
+import { gruposVisiveis, icone } from './icones.js';
+import { avisoDados, carregando, dadosAte, erroCartao, esc, iniciais, pronto, rodapeHtml } from './ui.js';
 
 const ABAS = ROTULOS_ABAS;
 const ADMIN = { usuarios: 'Usuários e permissões' };
 const IMPLEMENTADAS = new Set(['visao', 'vendas', 'clientes', 'usuarios']);
 const ABAS_COM_FILTRO = ['visao', 'vendas', 'clientes'];
 const LEGADO = '/legado/';
+// Linha abaixo do título de cada aba (vazio = sem subtítulo).
+const SUBTITULOS = {
+  visao: 'Resumo das abas e o que precisa de atenção',
+  vendas: 'Faturamento, origens, marcas e produtos',
+  clientes: 'Novos × recorrentes',
+  usuarios: 'Pessoas, perfis e histórico de mudanças',
+};
 
 const raiz = document.getElementById('app');
 let eu = null;
@@ -68,32 +76,37 @@ function falhaInicial(e) {
 
 function montarShell() {
   const loja = eu.loja?.nome || 'Painel';
-  const itens = permitidas();
-  const link = (a) => `<li><a href="#${a}" data-aba="${a}">
-      <span>${esc(rotuloDe(a))}</span>${IMPLEMENTADAS.has(a) ? '' : '<span class="selo">em breve</span>'}</a></li>`;
+  const link = (a) => `<li><a href="#${a}" data-aba="${a}">${icone(a)}
+      <span class="menu-rotulo">${esc(rotuloDe(a))}</span>${IMPLEMENTADAS.has(a) ? '' : '<span class="selo">em breve</span>'}</a></li>`;
+  const grupos = gruposVisiveis(permitidas()).map((g) => `<div class="menu-sep" id="grupo-${g.id}">${esc(g.titulo)}</div>
+        <ul class="menu" aria-labelledby="grupo-${g.id}">${g.abas.map(link).join('')}</ul>`).join('');
+  const perfil = `${eu.superAdmin ? 'Super admin' : eu.perfil || '—'}${eu.admin && !eu.superAdmin ? ' · admin' : ''}`;
+  const ate = dadosAte(eu.coletas, fuso());
   raiz.removeAttribute('aria-busy');
   raiz.className = 'app';
   raiz.innerHTML = `
     <aside class="lateral" id="menu" aria-label="Menu">
-      <div class="marca"><span>${esc(loja)}</span></div>
-      <nav><ul class="menu">${itens.filter((a) => a !== 'usuarios').map(link).join('')}</ul>
-        ${eu.admin ? `<div class="menu-sep">Administração</div><ul class="menu">${link('usuarios')}</ul>` : ''}
+      <div class="marca"><i class="marca-ponto" aria-hidden="true"></i><span>${esc(loja)}</span></div>
+      <nav>${grupos}
         <div class="menu-sep"></div>
-        <ul class="menu"><li><a href="${LEGADO}"><span>Relatórios antigos</span><span aria-hidden="true">↗</span></a></li></ul>
+        <ul class="menu"><li><a href="${LEGADO}">${icone('legado')}<span class="menu-rotulo">Relatórios antigos</span><span class="menu-externo" aria-hidden="true">↗</span></a></li></ul>
       </nav>
-      <div class="lateral-pe muted">${esc(eu.email)}</div>
+      <div class="lateral-pe">
+        <span class="avatar" aria-hidden="true">${esc(iniciais(eu.nome, eu.email))}</span>
+        <span class="lateral-eu">
+          <span class="lateral-nome" title="${esc(eu.nome || eu.email)}">${esc(eu.nome || eu.email)}</span>
+          <span class="lateral-perfil">${esc(perfil)}</span>
+        </span>
+      </div>
     </aside>
     <button type="button" class="veu" aria-label="Fechar menu" tabindex="-1"></button>
     <div class="principal">
       <header class="topo">
         <button type="button" class="btn-menu" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu">☰</button>
         <div class="topo-cabeca">
-          <span class="sobrelinha" aria-hidden="true">Painel</span>
+          <span class="sobrelinha">Painel${ate ? ` · dados até ${ate}` : ''}</span>
           <h1 class="topo-titulo" id="titulo"></h1>
-        </div>
-        <div class="usuario">
-          <span class="usuario-nome">${esc(eu.nome || eu.email)}</span>
-          <span class="usuario-perfil">${esc(eu.superAdmin ? 'super admin' : eu.perfil || '—')}${eu.admin && !eu.superAdmin ? ' · admin' : ''}</span>
+          <p class="topo-sub" id="subtitulo" hidden></p>
         </div>
       </header>
       <div class="barra-filtros" id="filtros" hidden></div>
@@ -105,6 +118,7 @@ function montarShell() {
     menu: raiz.querySelector('.lateral'),
     botaoMenu: raiz.querySelector('.btn-menu'),
     titulo: raiz.querySelector('#titulo'),
+    subtitulo: raiz.querySelector('#subtitulo'),
     filtros: raiz.querySelector('#filtros'),
     avisos: raiz.querySelector('#avisos'),
     conteudo: raiz.querySelector('#conteudo'),
@@ -231,6 +245,8 @@ async function rotear() {
   const pintarTela = () => {
     if (meu !== controle) return; // uma rota mais nova já pintou
     el.titulo.textContent = rotuloDe(rota.aba);
+    el.subtitulo.textContent = SUBTITULOS[rota.aba] ?? '';
+    el.subtitulo.hidden = !el.subtitulo.textContent;
     document.title = `${rotuloDe(rota.aba)} · ${eu.loja?.nome || 'Painel'}`;
     raiz.querySelectorAll('.menu a[data-aba]').forEach((a) => {
       if (a.dataset.aba === rota.aba) a.setAttribute('aria-current', 'page');
