@@ -513,8 +513,8 @@ button.barra-linha:hover .pilha { filter: brightness(1.15); }
   .view.dados { gap: 32px; }
   .view.dados .grade { row-gap: 32px; }
 }
-/* Foco programático ao abrir a tela "sem acesso": indicador discreto na borda, sem contorno externo. */
-.cartao-central:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* Foco programático ao abrir a tela "sem acesso": mesmo anel global de 2 px em --text, com 2 px de folga. */
+.cartao-central:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 
 /* ---------- usuários e permissões (e as telas auxiliares) ----------
    Mesma linguagem das telas de dados: superfícies planas, linhas de 1 px, controles sublinhados
@@ -637,7 +637,7 @@ select.input:disabled { opacity: .5; cursor: not-allowed; }
 }
 .tri-linha legend { float: left; font-size: 13px; color: var(--text-2); padding: 0; }
 .tri-linha:disabled { opacity: .5; }
-.tri { display: inline-flex; gap: 4px; }
+.tri { display: inline-flex; gap: 6px; }
 .tri-op span {
   display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border: 1px solid transparent; border-radius: 2px;
   font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap;
@@ -651,7 +651,7 @@ select.input:disabled { opacity: .5; cursor: not-allowed; }
 .tri-op input:checked + span { color: var(--text); border-color: var(--text); font-weight: 500; }
 .tri-op[data-v="l"] input:checked + span { color: var(--ok); border-color: var(--ok); }
 .tri-op[data-v="b"] input:checked + span { color: var(--bad); border-color: var(--bad); }
-.tri-op input:focus-visible + span { outline: 2px solid var(--text); outline-offset: 2px; }
+.tri-op input:focus-visible + span { outline: 2px solid var(--text); outline-offset: 1px; }
 .tri-linha:disabled .tri-op span { cursor: not-allowed; }
 
 /* entrada: a gaveta vem da direita com peso, o modal faz fade e cresce de 0,98; o fundo escurece.
