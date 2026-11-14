@@ -1,4 +1,5 @@
 // Formatação e componentes de tela. Dinheiro chega em centavos inteiros.
+import { VERSAO } from './versao.js';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
@@ -57,6 +58,10 @@ export const delta = (a, b, opcoes) => (b ? deltaPct((a / b - 1) * 100, opcoes) 
 
 const STATUS = { ok: 'ok', aviso: 'atenção', erro: 'problema', fora: 'fora do dia' };
 export const pill = (status, texto) => `<span class="pill st-${esc(status)}"><i aria-hidden="true"></i>${esc(texto || STATUS[status] || status)}</span>`;
+
+// Rodapé do produto (crédito do autor), igual em toda instância.
+export const rodapeHtml = () => `<footer class="rodape"><span>vtex-painel · v${esc(VERSAO)}</span>
+  <a href="https://github.com/alvesblucas" target="_blank" rel="noopener">Designed &amp; developed by Lucas Alves</a></footer>`;
 
 // Tira o estado "recarregando" que carregando() põe quando já havia conteúdo.
 export function pronto(el) {

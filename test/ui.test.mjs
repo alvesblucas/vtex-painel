@@ -77,3 +77,16 @@ test('CSV do modo servidor: linhas de várias páginas juntas, mesmo formato', (
   const txt = csvTexto(colunas, paginas.flat());
   assert.equal(txt, '\uFEFF"SKU";"Faturamento"\r\n"A";"1,00"\r\n"B";"2,50"');
 });
+
+test('rodapeHtml: crédito com link e versão do produto', async () => {
+  const { rodapeHtml } = await import('../public/js/ui.js');
+  const { VERSAO } = await import('../public/js/versao.js');
+  const html = rodapeHtml();
+  assert.match(html, /^<footer class="rodape"/);
+  assert.ok(html.includes('Designed &amp; developed by Lucas Alves'));
+  const link = html.match(/<a [^>]*href="https:\/\/github\.com\/alvesblucas"[^>]*>/)?.[0] ?? '';
+  assert.ok(link, 'link para o GitHub do autor');
+  assert.match(link, /rel="noopener"/);
+  assert.match(link, /target="_blank"/);
+  assert.ok(html.includes(`vtex-painel · v${VERSAO}`));
+});

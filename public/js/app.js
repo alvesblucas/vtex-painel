@@ -2,7 +2,7 @@
 import { api } from './api.js';
 import { montarBarra } from './barra-filtros.js';
 import { LISTAS, ROTULOS_ABAS, comLista, hojeLocal, lerHash, montarHash } from './estado.js';
-import { avisoDados, carregando, erroCartao, esc, pronto } from './ui.js';
+import { avisoDados, carregando, erroCartao, esc, pronto, rodapeHtml } from './ui.js';
 
 const ABAS = ROTULOS_ABAS;
 const ADMIN = { usuarios: 'Usuários e permissões' };
@@ -38,14 +38,16 @@ function irPara(aba, filtros) {
 function telaSimples(html) {
   raiz.removeAttribute('aria-busy');
   raiz.className = 'app app-simples';
-  raiz.innerHTML = `<main class="cartao-central" id="conteudo" tabindex="-1">${html}</main>`;
+  raiz.innerHTML = `<main class="cartao-central" id="conteudo" tabindex="-1">${html}${rodapeHtml()}</main>`;
 }
 
 async function semAcesso() {
   try {
     const mod = await import('./views/sem-acesso.js');
     telaSimples('');
-    mod.render(raiz.querySelector('main'), { eu, api });
+    const main = raiz.querySelector('main');
+    mod.render(main, { eu, api });
+    main.insertAdjacentHTML('beforeend', rodapeHtml()); // a view reescreve o main inteiro
   } catch {
     telaSimples(`<span class="selo selo-aviso">Sem acesso</span>
       <strong>Você ainda não tem acesso. Peça ao administrador.</strong>
@@ -72,7 +74,7 @@ function montarShell() {
   raiz.className = 'app';
   raiz.innerHTML = `
     <aside class="lateral" id="menu" aria-label="Menu">
-      <div class="marca"><span class="marca-ponto" aria-hidden="true"></span><span>${esc(loja)}</span></div>
+      <div class="marca"><span>${esc(loja)}</span></div>
       <nav><ul class="menu">${itens.filter((a) => a !== 'usuarios').map(link).join('')}</ul>
         ${eu.admin ? `<div class="menu-sep">Administração</div><ul class="menu">${link('usuarios')}</ul>` : ''}
         <div class="menu-sep"></div>
@@ -84,15 +86,19 @@ function montarShell() {
     <div class="principal">
       <header class="topo">
         <button type="button" class="btn-menu" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu">☰</button>
-        <h1 class="topo-titulo" id="titulo"></h1>
+        <div class="topo-cabeca">
+          <span class="sobrelinha" aria-hidden="true">Painel</span>
+          <h1 class="topo-titulo" id="titulo"></h1>
+        </div>
         <div class="usuario">
           <span class="usuario-nome">${esc(eu.nome || eu.email)}</span>
-          <span class="pill">${esc(eu.superAdmin ? 'super admin' : eu.perfil || '—')}${eu.admin && !eu.superAdmin ? ' · admin' : ''}</span>
+          <span class="usuario-perfil">${esc(eu.superAdmin ? 'super admin' : eu.perfil || '—')}${eu.admin && !eu.superAdmin ? ' · admin' : ''}</span>
         </div>
       </header>
       <div class="barra-filtros" id="filtros" hidden></div>
       <div class="avisos" id="avisos" hidden></div>
       <main class="conteudo" id="conteudo" tabindex="-1"></main>
+      ${rodapeHtml()}
     </div>`;
   el = {
     menu: raiz.querySelector('.lateral'),
