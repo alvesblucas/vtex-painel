@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { brl, brlK, csvTexto, delta, deltaPct, esc, int, pct } from '../public/js/ui.js';
+import { brl, brlK, csvTexto, dadosAte, delta, deltaPct, esc, iniciais, int, pct } from '../public/js/ui.js';
 import { escala } from '../public/js/graficos.js';
 
 const NBSP = /\u00a0/g;
@@ -19,10 +19,41 @@ test('formatação de dinheiro em centavos', () => {
 
 test('esc e variação', () => {
   assert.equal(esc('<img src=x onerror="a">&\''), '&lt;img src=x onerror=&quot;a&quot;&gt;&amp;&#39;');
-  assert.match(delta(110, 100), /class="delta up num">▲ 10%/);
-  assert.match(delta(90, 100), /down.*▼ 10%/);
+  assert.match(delta(110, 100), /class="pill up">▲ 10%/);
+  assert.match(delta(90, 100), /class="pill dn">▼ 10%/);
   assert.match(delta(90, 0), /—/);
-  assert.match(deltaPct(5, { subirEhBom: false }), /class="delta down num">▲ 5%/);
+  assert.doesNotMatch(delta(90, 0), /pill/, 'sem base: nada de pílula');
+  // subir é ruim (cancelados): alta vira atenção (wn), queda vira boa (up)
+  assert.match(deltaPct(5, { subirEhBom: false }), /class="pill wn">▲ 5%/);
+  assert.match(deltaPct(-5, { subirEhBom: false }), /class="pill up">▼ 5%/);
+  assert.match(deltaPct(0), /class="pill fl">= 0%/);
+});
+
+test('cartaoHtml: delta vira pílula, delta nulo não gera pílula, ícone opcional', async () => {
+  const { cartaoHtml } = await import('../public/js/ui.js');
+  assert.match(cartaoHtml({ rotulo: 'Pedidos', valor: '7', delta: deltaPct(12) }), /class="pill up"/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7', delta: null }), /pill/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7', delta: deltaPct(null) }), /pill/);
+  const comIcone = cartaoHtml({ rotulo: 'Pedidos', valor: '7', icone: 'pedidos' });
+  assert.match(comIcone, /<span class="cartao-icone"><svg/);
+  assert.match(comIcone, /aria-hidden="true"/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7' }), /<svg|cartao-icone/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7', icone: 'inexistente' }), /cartao-icone/);
+  assert.match(cartaoHtml({ rotulo: 'Pedidos de novos', valor: '7' }), /class="cartao-rotulo" title="Pedidos de novos"/);
+});
+
+test('avisoDados: cada aviso traz a pílula do estado', async () => {
+  const { avisoDados } = await import('../public/js/ui.js');
+  const el = { innerHTML: '', hidden: true };
+  const agora = Date.parse('2026-11-14T12:00:00Z');
+  avisoDados(el, [
+    { fonte: 'pedidos', ok: false, quando: '2026-11-14T03:00:00Z' },
+    { fonte: 'clientes', ok: true, quando: '2026-11-10T03:00:00Z' },
+  ], { clientes: { horasMax: 26 }, estoque: { horasMax: 26 } }, { agora });
+  assert.match(el.innerHTML, /<span class="pill st-erro"><i aria-hidden="true"><\/i>falhou<\/span>/);
+  assert.match(el.innerHTML, /<span class="pill st-aviso"><i aria-hidden="true"><\/i>atrasada<\/span>/);
+  assert.match(el.innerHTML, /<span class="pill st-aviso"><i aria-hidden="true"><\/i>sem coleta<\/span>/);
+  assert.equal(el.hidden, false);
 });
 
 test('CSV: ;, BOM, CRLF, centavos com vírgula, aspas escapadas', () => {
@@ -88,7 +119,8 @@ test('rodapeHtml: crédito com link e versão do produto', async () => {
   assert.ok(link, 'link para o GitHub do autor');
   assert.match(link, /rel="noopener"/);
   assert.match(link, /target="_blank"/);
-  assert.ok(html.includes(`vtex-painel · v${VERSAO}`));
+  assert.ok(html.includes(`<span>Painel · v${VERSAO}</span>`));
+  assert.ok(!html.includes('vtex-painel'));
 });
 
 test('cartao sem número e com valor nulo mostra — sem contar (Review Focus 4)', async () => {
@@ -115,10 +147,10 @@ test('cartao sem número e com valor nulo mostra — sem contar (Review Focus 4)
 
 test('cartaoHtml segue a mockup: rótulo, valor e a variação abaixo do valor', async () => {
   const { cartaoHtml } = await import('../public/js/ui.js');
-  const html = cartaoHtml({ rotulo: 'Pedidos', valor: '7', sub: 'vs anterior', delta: '<span class="delta up num">▲ 2%</span>' });
+  const html = cartaoHtml({ rotulo: 'Pedidos', valor: '7', sub: 'vs anterior', delta: '<span class="pill up">▲ 2%</span>' });
   const iValor = html.indexOf('cartao-valor');
   assert.ok(html.indexOf('cartao-rotulo') < iValor);
-  assert.ok(html.indexOf('class="delta') > iValor, 'variação abaixo do valor');
+  assert.ok(html.indexOf('class="pill') > iValor, 'variação abaixo do valor');
   assert.match(html, /<div class="cartao-pe">.*<span class="cartao-sub">vs anterior<\/span><\/div>/s);
   assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7' }), /cartao-pe/);
 });
@@ -127,8 +159,8 @@ test('cartaoHtml: valor longo nunca some calado; o title guarda o valor inteiro'
   const { cartaoHtml } = await import('../public/js/ui.js');
   const html = cartaoHtml({ rotulo: 'Faturamento', valor: 'R$ 12.345.678.901,23' });
   assert.ok(html.includes('class="cartao-valor num" title="R$ 12.345.678.901,23">'), html);
-  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: null }), /title=/);
-  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '—' }), /title=/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: null }), /cartao-valor num" title=/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '—' }), /cartao-valor num" title=/);
 });
 
 // Cartão falso: o que pronto(), cartao() e contar() usam.
@@ -180,4 +212,28 @@ test('brlK com ref: a unidade vem do valor final, os intermediários não trocam
     cartao(b.el, { rotulo: 'Faturamento', valor: brlK(935_506), contagem: 'teste-fat', numero: 935_506, formatar: brlK });
     assert.equal(limpo(b.valorEl.textContent), 'R$ 18.900,00', 'ponto de partida já na unidade do valor final');
   });
+});
+
+test('iniciais: do nome (primeira e última palavra) ou do e-mail', () => {
+  assert.equal(iniciais('Maria Souza', 'm@x.com'), 'MS');
+  assert.equal(iniciais('Maria da Silva Souza', 'm@x.com'), 'MS');
+  assert.equal(iniciais('', 'admin@exemplo.com'), 'AD');
+  assert.equal(iniciais(undefined, 'joao.lima@exemplo.com'), 'JL');
+  assert.equal(iniciais('  ', 'x@exemplo.com'), 'X');
+  assert.equal(iniciais('Ângela', 'a@x.com'), 'ÂN');
+  assert.equal(iniciais('', ''), '?');
+});
+
+test('dadosAte: dia (dd/mm, fuso da loja) da coleta ok mais antiga entre as fontes', () => {
+  const coletas = [
+    { fonte: 'pedidos', quando: '2026-11-14T02:30:00Z', ok: 1 }, // 13/11 23:30 em UTC−3
+    { fonte: 'clientes', quando: '2026-11-14T12:00:00Z', ok: 1 },
+    { fonte: 'estoque', quando: '2026-11-10T12:00:00Z', ok: 0 }, // falha: não define a data
+  ];
+  assert.equal(dadosAte(coletas, -3), '13/11');
+  assert.equal(dadosAte(coletas, 0), '14/11');
+  assert.equal(dadosAte([{ fonte: 'pedidos', quando: '2026-11-14T02:30:00Z', ok: 0 }]), '');
+  assert.equal(dadosAte([{ fonte: 'pedidos', quando: 'lixo', ok: 1 }]), '');
+  assert.equal(dadosAte([]), '');
+  assert.equal(dadosAte(undefined), '');
 });

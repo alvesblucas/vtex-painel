@@ -1,7 +1,7 @@
 // Usuários e permissões (só admin): Pessoas, Perfis e Histórico. Toda escrita passa pela API, que audita.
 // Admin comum: no próprio cadastro só o nome; cadastro de outro administrador, nada (R15, mesma regra da API).
 import { ROTULOS_ABAS } from '../estado.js';
-import { erroCartao, esc, quando, tabela } from '../ui.js';
+import { erroCartao, esc, pill, quando, tabela } from '../ui.js';
 import { estrutura } from './comum.js';
 
 const ABAS = Object.keys(ROTULOS_ABAS);
@@ -179,12 +179,18 @@ function pintarPessoas(st, painel) {
         td.className = 'num quebra';
         td.textContent = u.email;
       } },
-      { chave: 'perfilTxt', titulo: 'Perfil' },
+      { chave: 'perfilTxt', titulo: 'Perfil', celula: (u, td) => {
+        if (u.perfilTxt === '—') { td.textContent = '—'; return; }
+        const s = document.createElement('span');
+        s.className = 'pill pf';
+        s.textContent = u.perfilTxt;
+        td.append(s);
+      } },
       { chave: 'abasTxt', titulo: 'Abas', ordenavel: false, celula: (u, td) => celulaAbas(u, td) },
       { chave: 'rsTxt', titulo: 'R$' },
       { chave: 'ultimo_acesso', titulo: 'Último acesso', formato: (v) => (v ? quando(v, fuso) : '—') },
       { chave: 'ativoTxt', titulo: 'Status', celula: (u, td) => {
-        td.innerHTML = `<span class="pill ${u.ativo ? 'st-ok' : 'st-fora'}"><i aria-hidden="true"></i>${u.ativo ? 'ativo' : 'inativo'}</span>`;
+        td.innerHTML = pill(u.ativo ? 'ok' : 'fora', u.ativo ? 'ativo' : 'inativo');
       } },
       { chave: 'acao', titulo: 'Ações', ordenavel: false, celula: (u, td) => celulaAcao(st, u, td) },
     ],
@@ -200,7 +206,7 @@ function celulaNome(u, td) {
   const selo = u.superAdmin ? 'administrador principal' : u.admin ? 'admin' : '';
   if (selo) {
     const s = document.createElement('span');
-    s.className = `selo ${u.superAdmin ? 'selo-principal' : ''}`;
+    s.className = `pill ${u.superAdmin ? 'ac' : 'pf'}`;
     s.textContent = selo;
     td.append(' ', s);
   }
