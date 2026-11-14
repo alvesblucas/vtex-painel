@@ -29,7 +29,7 @@ export async function render(el, ctx) {
         <div class="card-head"><h2 id="t-semana">Clientes novos por semana</h2><span class="sub">% dos pedidos do site</span></div>
         <div data-b="semana"></div>
       </section>
-    </div>`);
+    </div>`, 'dados');
   const b = (k) => raiz.querySelector(`[data-b="${k}"]`);
   const f = ctx.filtros;
   // Uma consulta alimenta os três blocos; cada um tem seu estado. Se falhar, "Tentar de novo" refaz a consulta.
@@ -58,10 +58,10 @@ function pintarCartoes(el, d, ctx) {
   const vv = ctx.eu.verValores;
   const sub = (t) => (vv && d[t].valor != null ? brlK(d[t].valor) : `${num1((d[t].pedidos / total) * 100)}% dos pedidos`);
   const lista = [
-    { rotulo: 'Clientes novos', valor: pctTxt(d.pctNovos), sub: d.cmp ? `${rotuloCmp(ctx.filtros)}: ${pctTxt(d.cmp.pctNovos)}` : 'novos ÷ (novos + recorrentes)', delta: d.cmp ? deltaPp(d.pctNovos, d.cmp.pctNovos) : '' },
-    { rotulo: 'Pedidos de novos', valor: int(d.novo.pedidos), sub: sub('novo') },
-    { rotulo: 'Pedidos de recorrentes', valor: int(d.recorrente.pedidos), sub: sub('recorrente') },
-    { rotulo: 'Indefinidos', valor: int(d.indefinido.pedidos), sub: 'sem histórico do cliente' },
+    { rotulo: 'Clientes novos', valor: pctTxt(d.pctNovos), numero: d.pctNovos, formatar: pctTxt, sub: d.cmp ? `${rotuloCmp(ctx.filtros)}: ${pctTxt(d.cmp.pctNovos)}` : 'novos ÷ (novos + recorrentes)', delta: d.cmp ? deltaPp(d.pctNovos, d.cmp.pctNovos) : '' },
+    { rotulo: 'Pedidos de novos', valor: int(d.novo.pedidos), numero: d.novo.pedidos, formatar: int, sub: sub('novo') },
+    { rotulo: 'Pedidos de recorrentes', valor: int(d.recorrente.pedidos), numero: d.recorrente.pedidos, formatar: int, sub: sub('recorrente') },
+    { rotulo: 'Indefinidos', valor: int(d.indefinido.pedidos), numero: d.indefinido.pedidos, formatar: int, sub: 'sem histórico do cliente' },
   ];
   el.innerHTML = `<div class="grade cartoes">${lista.map(() => '<div class="card s3"></div>').join('')}</div>`;
   el.querySelectorAll('.card').forEach((card, i) => cartao(card, lista[i]));

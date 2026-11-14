@@ -8,10 +8,10 @@ const ESQUELETO = '<div class="esqueleto" aria-label="Carregando"><span></span><
  * Monta a estrutura da view uma vez; ao mudar só os filtros, devolve a mesma (sem pulo de layout).
  * A chave inclui o que muda a estrutura (ex.: ver valores).
  */
-export function estrutura(el, chave, html) {
+export function estrutura(el, chave, html, classe = '') {
   const atual = el.firstElementChild;
   if (atual?.classList.contains('view') && atual.dataset.chave === chave) return { raiz: atual, nova: false };
-  el.innerHTML = `<div class="view" data-chave="${chave}">${html}</div>`;
+  el.innerHTML = `<div class="view${classe ? ` ${classe}` : ''}" data-chave="${chave}">${html}</div>`;
   return { raiz: el.firstElementChild, nova: true };
 }
 
@@ -49,5 +49,12 @@ export const rotuloCmp = (filtros) => CMPS[filtros.cmp] ?? 'Comparação';
 export const temCmp = (filtros) => filtros.cmp !== 'nenhum';
 
 // Placeholder com formato de cartão (mantém a altura da fileira enquanto carrega).
-export const cartoesEsqueleto = (n, classe = 's3') =>
-  `<div class="grade cartoes">${`<div class="card ${classe}">${ESQUELETO}</div>`.repeat(n)}</div>`;
+// chaves[i] dá ao i-ésimo cartão o view-transition-name final (kpi-<chave>): a troca de aba
+// captura o esqueleto já com o nome, e o KPI da tela anterior faz morph até ele.
+export const cartoesEsqueleto = (n, classe = 's3', chaves = []) => {
+  const cartoes = Array.from({ length: n }, (_, i) => {
+    const nome = chaves[i] ? ` style="view-transition-name: kpi-${esc(chaves[i])}"` : '';
+    return `<div class="card ${classe}"${nome}>${ESQUELETO}</div>`;
+  });
+  return `<div class="grade cartoes">${cartoes.join('')}</div>`;
+};

@@ -100,9 +100,10 @@ export function erroCartao(el, mensagem, tentar) {
 }
 
 // Cartão de número: rótulo, valor (texto já formatado), sub e variação (html de delta()/deltaPct()).
-export const cartaoHtml = ({ rotulo, valor, sub, delta: variacao }) => `<div class="cartao-rotulo"><span>${esc(rotulo)}</span>${variacao ?? ''}</div>
+// Ordem da mockup: rótulo em caixa alta → valor grande → variação e sub numa linha abaixo.
+export const cartaoHtml = ({ rotulo, valor, sub, delta: variacao }) => `<div class="cartao-rotulo">${esc(rotulo)}</div>
     <div class="cartao-valor num">${esc(valor ?? '—')}</div>
-    ${sub ? `<div class="cartao-sub">${esc(sub)}</div>` : ''}`;
+    ${variacao || sub ? `<div class="cartao-pe">${variacao ?? ''}${sub ? `<span class="cartao-sub">${esc(sub)}</span>` : ''}</div>` : ''}`;
 
 // Último elemento de valor de cada métrica: a contagem nova parte do que está na tela (troca de filtro ou de aba).
 const valorPorChave = new Map();

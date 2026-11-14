@@ -112,3 +112,13 @@ test('cartao sem número e com valor nulo mostra — sem contar (Review Focus 4)
   assert.equal(el.style.viewTransitionName, 'kpi-pedidos');
   assert.equal(valorEl.textContent, '7', 'sem rAF no Node, escreve o valor final na hora');
 });
+
+test('cartaoHtml segue a mockup: rótulo, valor e a variação abaixo do valor', async () => {
+  const { cartaoHtml } = await import('../public/js/ui.js');
+  const html = cartaoHtml({ rotulo: 'Pedidos', valor: '7', sub: 'vs anterior', delta: '<span class="delta up num">▲ 2%</span>' });
+  const iValor = html.indexOf('cartao-valor');
+  assert.ok(html.indexOf('cartao-rotulo') < iValor);
+  assert.ok(html.indexOf('class="delta') > iValor, 'variação abaixo do valor');
+  assert.match(html, /<div class="cartao-pe">.*<span class="cartao-sub">vs anterior<\/span><\/div>/s);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7' }), /cartao-pe/);
+});

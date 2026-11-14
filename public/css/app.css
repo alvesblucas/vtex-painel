@@ -12,7 +12,10 @@
      --rule      #2a2b2f   1,36:1  (linha decorativa, não carrega informação)
    Séries validadas com o validate_palette.js da skill dataviz (modo escuro, surface #0e0e12):
      --cat-novo #3987e5 × --cat-rec #d55181 → todas as checagens PASS
-     (ΔE CVD 15,9 protan · visão normal 26,5; ambas ≥ 3:1). A série atual usa o branco do texto. */
+     (ΔE CVD 15,9 protan · visão normal 26,5; ambas ≥ 3:1). A série atual usa o branco do texto.
+   Série × comparação (#fbfcff × #6e7074), revalidadas na Task 3: contraste PASS (≥ 3:1) e ΔE 44,6
+     (normal e CVD). Faixa de luminosidade e croma "falham" de propósito: são neutras, não categóricas;
+     a identidade vem do traço (cheio 1,5 px × tracejado 3 5) e da legenda, nunca só da cor. */
 @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 300; font-display: swap; src: url("/fonts/inter-tight-300.woff2") format("woff2"); }
 @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/inter-tight-400.woff2") format("woff2"); }
 @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/inter-tight-500.woff2") format("woff2"); }
@@ -174,6 +177,9 @@ h2 { font-size: 15px; line-height: 20px; }
 .filtro-botao:hover:not(:disabled)::after, .filtro-botao[aria-expanded="true"]::after,
 .filtro-select:not(.desligado):hover::after { transform: scaleX(1); }
 .filtro-botao:disabled, .filtro-select.desligado { opacity: .45; }
+/* lista com seleção: o sublinhado fixo fica cheio e o rótulo acende */
+.filtro-botao.ativo::before { opacity: 1; }
+.filtro-botao.ativo .filtro-rotulo { color: var(--text-2); }
 .filtro-rotulo { color: var(--muted); font-size: 13px; }
 .filtro-valor { font-weight: 500; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
 .filtro-select select { font: inherit; font-weight: 500; color: var(--text); background: transparent; border: 0; height: 100%; padding: 0 2px; cursor: pointer; }
@@ -249,8 +255,8 @@ input[type="date"].input { color-scheme: dark; font-family: var(--mono); font-si
 /* ---------- avisos ---------- */
 .avisos { padding: 12px var(--gutter) 0; display: flex; flex-direction: column; gap: 6px; }
 .aviso-dados {
-  display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-radius: var(--radius); font-size: 13px;
-  color: var(--warn); background: rgba(245, 183, 79, .08); border: 1px solid rgba(245, 183, 79, .28);
+  display: flex; gap: 10px; align-items: center; padding: 6px 12px; font-size: 13px; line-height: 18px;
+  color: var(--warn); background: rgba(212, 162, 76, .06); border-left: 2px solid var(--warn);
 }
 .aviso-sessao {
   position: sticky; top: 0; z-index: 60; display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -263,10 +269,28 @@ input[type="date"].input { color-scheme: dark; font-family: var(--mono); font-si
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; min-width: 0; position: relative; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .card-head .sub { color: var(--muted); font-size: 12px; }
-.cartao-rotulo { color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.cartao-valor { font: 600 28px/36px var(--mono); font-variant-numeric: normal; margin-top: 6px; letter-spacing: -.02em; overflow-wrap: anywhere; }
-.cartao-sub { color: var(--text-2); font-size: 13px; margin-top: 4px; }
-.delta { font-size: 12px; white-space: nowrap; }
+.cartao-rotulo { color: var(--muted); font-size: 12px; line-height: 16px; letter-spacing: .06em; text-transform: uppercase; }
+/* valor grande e fino; tabular-nums para não pular de largura enquanto conta */
+.cartao-valor {
+  font: 300 34px/40px var(--sans); font-variant-numeric: tabular-nums; letter-spacing: -.035em;
+  margin: 12px 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cartao-pe { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: 12.5px; line-height: 18px; }
+.cartao-sub { color: var(--muted); }
+.delta { font-size: 12.5px; white-space: nowrap; }
+.delta.num, .cartao-valor.num { font-family: var(--sans); }
+
+/* fileira de KPIs: grade sem caixas, separada por linhas verticais de 1 px; a 1ª coluna de cada fileira
+   fica sem linha e alinhada ao título. Sem overflow/recorte: o snapshot da View Transition (kpi-*) não é recortado
+   pelo pai, então a linha tem de não existir, e não só estar escondida. */
+.grade.cartoes { column-gap: 0; row-gap: 22px; padding-top: 4px; }
+.cartoes .card {
+  background: none; border: 0; border-left: 1px solid var(--rule); border-radius: 0; padding: 4px 22px 14px;
+  transition: transform var(--dur-media) var(--ease-peso);
+}
+.cartoes .card:first-child { border-left: 0; padding-left: 0; }
+@media (prefers-reduced-motion: no-preference) { .cartoes .card:hover { transform: translateY(-4px); } }
+.cartoes .esqueleto span:nth-child(2) { height: 34px; }
 .recarregando { opacity: .5; transition: opacity .15s; pointer-events: none; }
 
 .pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 2px; font-size: 12px; border: 1px solid var(--border); background: var(--raised); color: var(--text-2); white-space: nowrap; }
@@ -300,14 +324,17 @@ input[type="date"].input { color-scheme: dark; font-family: var(--mono); font-si
 .campo-busca .input { width: 100%; }
 .tabela-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th {
+  text-align: left; color: var(--muted); font-weight: 500; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase;
+  padding: 0; border-bottom: 1px solid var(--rule); white-space: nowrap;
+}
 th button { width: 100%; text-align: inherit; padding: 8px 10px; color: inherit; }
 th button:hover { color: var(--text); }
 th button::after { content: attr(data-seta); margin-left: 4px; color: var(--accent); }
 td { padding: 9px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 td.r, th.r { text-align: right; }
 td.num { white-space: nowrap; }
-tbody tr:hover td { background: var(--raised); }
+tbody tr:hover td { background: rgba(255, 255, 255, .025); }
 .tabela-vazia { color: var(--muted); text-align: center; padding: 22px 10px; }
 .tabela-pe { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 10px; font-size: 12px; }
 .paginas { display: flex; gap: 6px; }
@@ -318,19 +345,22 @@ tbody tr:hover td { background: var(--raised); }
 .grafico svg { display: block; width: 100%; height: auto; overflow: visible; }
 .grafico svg:focus-visible { outline-offset: 4px; }
 .grade-linha { stroke: var(--rule); stroke-width: 1; }
-.eixo { fill: var(--muted); font: 11px var(--mono); }
-.traco-serie { fill: none; stroke: var(--serie); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.traco-ref { fill: none; stroke: var(--serie-ref); stroke-width: 2; stroke-dasharray: 5 4; stroke-linecap: round; }
-.ponto { fill: var(--serie); stroke: var(--surface); stroke-width: 2; }
+.eixo { fill: var(--muted); font: 11px var(--sans); font-variant-numeric: tabular-nums; }
+.traco-serie { fill: none; stroke: var(--serie); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.traco-ref { fill: none; stroke: var(--serie-ref); stroke-width: 1.25; stroke-dasharray: 3 5; }
+.area { stroke: none; }
+.area-topo { stop-color: var(--serie); stop-opacity: .12; }
+.area-base { stop-color: var(--serie); stop-opacity: 0; }
+.ponto { fill: var(--serie); stroke: var(--surface); stroke-width: 2; r: 3; }
 .cruz { stroke: var(--control); stroke-width: 1; }
 .foco { fill: var(--serie); stroke: var(--surface); stroke-width: 2; }
 .foco-ref { fill: var(--serie-ref); stroke: var(--surface); stroke-width: 2; }
 
-.legenda { display: flex; gap: 14px; font-size: 12px; color: var(--text-2); flex-wrap: wrap; margin-bottom: 10px; }
+.legenda { display: flex; gap: 18px; font-size: 12px; color: var(--muted); flex-wrap: wrap; margin-bottom: 12px; }
 .legenda span { display: inline-flex; align-items: center; gap: 6px; }
 .chave-serie, .chave-ref, .chave-barra, .chave-marco { display: inline-block; flex: none; }
-.chave-serie { width: 14px; height: 2px; background: var(--serie); border-radius: 1px; }
-.chave-ref { width: 14px; height: 2px; background: repeating-linear-gradient(90deg, var(--serie-ref) 0 4px, transparent 4px 7px); }
+.chave-serie { width: 16px; height: 1.5px; background: var(--serie); }
+.chave-ref { width: 16px; height: 1.5px; background: repeating-linear-gradient(90deg, var(--serie-ref) 0 3px, transparent 3px 8px); }
 .chave-barra { width: 10px; height: 10px; border-radius: 2px; background: var(--serie); }
 .chave-marco { width: 3px; height: 12px; border-radius: 1px; background: var(--serie-ref); }
 .dica .chave-barra { width: 14px; height: 2px; border-radius: 1px; }
@@ -346,7 +376,7 @@ tbody tr:hover td { background: var(--raised); }
 .dica.a-direita { transform: translate(0, -100%); }
 .dica-titulo { color: var(--muted); margin-bottom: 2px; }
 .dica-linha { display: flex; align-items: center; gap: 8px; }
-.dica-linha b { font-family: var(--mono); font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.dica-linha b { font-family: var(--sans); font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
 .dica-linha span { color: var(--text-2); }
 
 .barras { display: flex; flex-direction: column; gap: 2px; }
@@ -357,10 +387,10 @@ tbody tr:hover td { background: var(--raised); }
 button.barra-linha:hover, .barra-linha:focus-visible { background: rgba(255, 255, 255, .04); color: var(--text); }
 button.barra-linha:hover .barra { filter: brightness(1.15); }
 .barra-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.barra-trilho { position: relative; height: 14px; }
-.barra { position: absolute; left: 0; top: 0; bottom: 0; background: var(--serie); border-radius: 0 4px 4px 0; min-width: 2px; transform-origin: left; }
+.barra-trilho { position: relative; height: 10px; }
+.barra { position: absolute; left: 0; top: 0; bottom: 0; background: var(--serie); border-radius: 0 2px 2px 0; min-width: 2px; transform-origin: left; }
 .marco { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1.5px; border-radius: 1px; background: var(--serie-ref); box-shadow: 0 0 0 2px var(--surface); }
-.barra-valor { font-size: 12px; color: var(--text); min-width: 64px; text-align: right; }
+.barra-valor { font: 12.5px var(--sans); font-variant-numeric: tabular-nums; color: var(--text); min-width: 64px; text-align: right; }
 
 /* ---------- responsivo ---------- */
 @media (max-width: 1000px) {
@@ -408,8 +438,8 @@ button.barra-linha:hover .barra { filter: brightness(1.15); }
 .view { display: flex; flex-direction: column; gap: var(--gap); }
 .secao { min-width: 0; }
 .aviso-info {
-  display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-radius: var(--radius); font-size: 13px;
-  color: var(--text-2); background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14);
+  display: flex; gap: 10px; align-items: center; padding: 6px 12px; font-size: 13px; line-height: 18px;
+  color: var(--text-2); background: rgba(255, 255, 255, .03); border-left: 2px solid var(--muted);
 }
 .aviso-info > span { color: var(--text); }
 .estado-faixa { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -437,8 +467,8 @@ a.alerta:hover, .atalho:hover { background: var(--raised); color: var(--text); }
 .pilha { position: absolute; left: 0; top: 0; bottom: 0; display: flex; gap: 2px; min-width: 4px; }
 .seg-novo, .seg-rec { flex-basis: 0; min-width: 0; }
 .seg-novo { background: var(--cat-novo); border-radius: 0; }
-.seg-rec { background: var(--cat-rec); border-radius: 0 4px 4px 0; }
-.seg-novo:only-child, .seg-novo:last-child { border-radius: 0 4px 4px 0; }
+.seg-rec { background: var(--cat-rec); border-radius: 0 2px 2px 0; }
+.seg-novo:only-child, .seg-novo:last-child { border-radius: 0 2px 2px 0; }
 button.barra-linha:hover .pilha { filter: brightness(1.15); }
 .chave-novo, .chave-rec { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; }
 .chave-novo { background: var(--cat-novo); } .chave-rec { background: var(--cat-rec); }
@@ -448,11 +478,31 @@ button.barra-linha:hover .pilha { filter: brightness(1.15); }
 .sem-acesso-dados dt { color: var(--muted); }
 .sem-acesso-dados dd { margin: 0; overflow-wrap: anywhere; }
 .topo-alinhado { align-items: start; }
+/* telas de dados (Visão geral, Vendas, Clientes): seções planas, linha superior de 1 px e cabeçalho em caixa alta */
+.view.dados { gap: 40px; }
+.view.dados .grade { row-gap: 40px; column-gap: 36px; }
+.view.dados .grade.cartoes { column-gap: 0; row-gap: 22px; }
+.dados .card:not(.cartoes .card) { background: none; border: 0; border-top: 1px solid var(--rule); border-radius: 0; padding: 22px 0 0; }
+.dados .card-head { margin-bottom: 18px; }
+.dados .card-head h2 { color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+.dados .estado-faixa { padding-top: 18px; }
+@media (max-width: 1000px) {
+  .cartoes .s4 { grid-column: span 6; }
+  /* duas por fileira: cada ímpar abre uma fileira nova */
+  .cartoes .card:nth-child(odd) { border-left: 0; padding-left: 0; }
+  /* 11 vãos de 36 px não cabem numa tela estreita (rolagem horizontal): aqui as seções já ocupam a linha toda */
+  .view.dados .grade { column-gap: var(--gap); }
+}
 @media (max-width: 600px) {
-  .cartoes .s3 { grid-column: span 6; }
-  .cartoes .card { padding: 14px; }
-  .cartoes .cartao-valor { font-size: 19px; line-height: 26px; }
-  .cartoes .cartao-sub { font-size: 12px; }
+  .cartoes .s3, .cartoes .s4 { grid-column: span 6; }
+  .grade.cartoes { row-gap: 18px; }
+  .cartoes .card { padding: 2px 14px 10px; }
+  .cartoes .card:nth-child(odd) { padding-left: 0; }
+  .cartoes .cartao-valor { font-size: 23px; line-height: 28px; letter-spacing: -.03em; margin: 8px 0 6px; }
+  .cartoes .cartao-rotulo { font-size: 11px; letter-spacing: .04em; }
+  .cartao-pe { font-size: 12px; }
+  .view.dados { gap: 32px; }
+  .view.dados .grade { row-gap: 32px; }
 }
 /* Foco programático ao abrir a tela "sem acesso": indicador discreto na borda, sem contorno externo. */
 .cartao-central:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }

@@ -83,18 +83,24 @@ export function revelarLinha(svg, { reduzido: r = reduzido() } = {}) {
   const traco = svg?.querySelector('.traco-serie');
   if (r || !anima(traco) || typeof traco.getTotalLength !== 'function') return;
   const easing = curva();
-  const len = Math.ceil(traco.getTotalLength());
-  if (!(len > 0)) return;
-  traco.animate(
-    [
-      { strokeDasharray: `${len} ${len}`, strokeDashoffset: len },
-      { strokeDasharray: `${len} ${len}`, strokeDashoffset: 0 },
-    ],
-    { duration: DUR_MEDIA, easing },
-  );
-  svg.querySelectorAll('.area, .traco-ref, .ponto').forEach((e) => {
-    if (anima(e)) e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: DUR_LONGA - DUR_MEDIA, delay: DUR_MEDIA, easing, fill: 'backwards' });
-  });
+  try {
+    // getTotalLength lança em SVG fora do layout (ex.: contêiner oculto): aí o gráfico só aparece pronto.
+    const len = Math.ceil(traco.getTotalLength());
+    if (!(len > 0)) return;
+    traco.animate(
+      [
+        { strokeDasharray: `${len} ${len}`, strokeDashoffset: len },
+        { strokeDasharray: `${len} ${len}`, strokeDashoffset: 0 },
+      ],
+      { duration: DUR_MEDIA, easing },
+    );
+    // A área (degradê sob a linha), a comparação e os pontos aparecem depois do traço.
+    svg.querySelectorAll('.area, .traco-ref, .ponto').forEach((e) => {
+      if (anima(e)) e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: DUR_LONGA - DUR_MEDIA, delay: DUR_MEDIA, easing, fill: 'backwards' });
+    });
+  } catch {
+    // sem animação: o SVG já está desenhado
+  }
 }
 
 // Barras crescem do zero, escalonadas em até 40 ms × índice; a última termina em ≤ 900 ms.

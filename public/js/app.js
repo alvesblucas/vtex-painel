@@ -152,10 +152,25 @@ function desenharBarra() {
   });
 }
 
+// Módulos das views já carregados. As abas de dados são pré-carregadas depois do shell para que a troca
+// de aba (síncrona, dentro da View Transition) já pinte o esqueleto delas com os nomes do morph dos KPIs.
+const views = new Map();
+const PRECARREGAR = ['visao', 'vendas', 'clientes'];
+
+function precarregarViews() {
+  for (const aba of PRECARREGAR) {
+    if (!eu.abas.includes(aba) || views.has(aba)) continue;
+    import(`./views/${aba}.js`).then((mod) => views.set(aba, mod), () => {}); // falha: carrega na hora, como antes
+  }
+}
+
 async function carregarView(aba) {
   if (!IMPLEMENTADAS.has(aba)) return import('./views/em-breve.js');
+  if (views.has(aba)) return views.get(aba);
   try {
-    return await import(`./views/${aba}.js`);
+    const mod = await import(`./views/${aba}.js`);
+    views.set(aba, mod);
+    return mod;
   } catch {
     return import('./views/em-breve.js');
   }
@@ -185,22 +200,6 @@ async function rotear() {
   controle = new AbortController();
   const meu = controle;
 
-  // Troca de aba: título, menu e #conteudo (já no carregando) mudam numa View Transition.
-  // A callback é síncrona: a transição captura o carregando e nunca espera a API.
-  const pintarTela = () => {
-    el.titulo.textContent = rotuloDe(rota.aba);
-    document.title = `${rotuloDe(rota.aba)} · ${eu.loja?.nome || 'Painel'}`;
-    raiz.querySelectorAll('.menu a[data-aba]').forEach((a) => {
-      if (a.dataset.aba === rota.aba) a.setAttribute('aria-current', 'page');
-      else a.removeAttribute('aria-current');
-    });
-    desenharBarra();
-    if (trocouAba) {
-      el.conteudo.replaceChildren();
-      carregando(el.conteudo);
-    }
-  };
-
   const ctx = {
     eu,
     aba: rota.aba,
@@ -223,6 +222,35 @@ async function rotear() {
     },
   };
 
+  // Troca de aba: título, menu e #conteudo (já no carregando) mudam numa View Transition.
+  // A callback é síncrona: a transição captura o carregando e nunca espera a API.
+  // Se o módulo da aba já está carregado e tem esqueleto(), a tela nova nasce com a estrutura
+  // da view (e os view-transition-name dos KPIs): é isso que faz o morph entre as abas acontecer.
+  let comEsqueleto = false;
+  const pintarTela = () => {
+    if (meu !== controle) return; // uma rota mais nova já pintou
+    el.titulo.textContent = rotuloDe(rota.aba);
+    document.title = `${rotuloDe(rota.aba)} · ${eu.loja?.nome || 'Painel'}`;
+    raiz.querySelectorAll('.menu a[data-aba]').forEach((a) => {
+      if (a.dataset.aba === rota.aba) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    desenharBarra();
+    if (!trocouAba) return;
+    el.conteudo.replaceChildren();
+    const esqueleto = views.get(rota.aba)?.esqueleto;
+    if (typeof esqueleto === 'function') {
+      try {
+        esqueleto(el.conteudo, ctx);
+        comEsqueleto = true;
+        return;
+      } catch {
+        el.conteudo.replaceChildren(); // esqueleto falhou: cai no carregando genérico
+      }
+    }
+    carregando(el.conteudo);
+  };
+
   let telaTrocada;
   if (trocouAba) {
     // 1ª tela: não há de onde transicionar.
@@ -234,7 +262,8 @@ async function rotear() {
     const [mod] = await Promise.all([carregarView(rota.aba), telaTrocada]);
     if (meu !== controle) return;
     pronto(el.conteudo);
-    if (trocouAba) el.conteudo.replaceChildren();
+    // O carregando genérico sai; o esqueleto da view fica, e render() reaproveita a estrutura.
+    if (trocouAba && !comEsqueleto) el.conteudo.replaceChildren();
     await mod.render(el.conteudo, ctx);
   } catch (e) {
     if (e?.name === 'AbortError' || meu !== controle) return;
@@ -267,6 +296,7 @@ async function iniciar() {
   window.addEventListener('hashchange', rotear);
   carregarOpcoes();
   rotear();
+  precarregarViews();
 }
 
 // O link "pular para o conteúdo" não pode mexer no hash (o hash é a rota).
