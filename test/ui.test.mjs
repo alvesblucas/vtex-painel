@@ -90,3 +90,25 @@ test('rodapeHtml: crédito com link e versão do produto', async () => {
   assert.match(link, /target="_blank"/);
   assert.ok(html.includes(`vtex-painel · v${VERSAO}`));
 });
+
+test('cartao sem número e com valor nulo mostra — sem contar (Review Focus 4)', async () => {
+  const { cartao, cartaoHtml } = await import('../public/js/ui.js');
+  assert.match(cartaoHtml({ rotulo: 'Pedidos', valor: null }), /<div class="cartao-valor num">—<\/div>/);
+  assert.match(cartaoHtml({ rotulo: 'Pedidos', valor: '—' }), /<div class="cartao-valor num">—<\/div>/);
+  // Elemento falso mínimo: o que pronto() e cartao() usam.
+  const valorEl = { textContent: '', dataset: {} };
+  const el = {
+    innerHTML: '',
+    style: {},
+    classList: { remove() {} },
+    removeAttribute() {},
+    querySelector: () => valorEl,
+  };
+  cartao(el, { rotulo: 'Pedidos', valor: null, numero: null, formatar: String });
+  assert.match(el.innerHTML, /cartao-valor num">—</);
+  assert.equal(valorEl.textContent, '', 'não chamou contar');
+  assert.equal(el.style.viewTransitionName, undefined);
+  cartao(el, { rotulo: 'Pedidos', valor: '7', chave: 'pedidos', numero: 7, formatar: String });
+  assert.equal(el.style.viewTransitionName, 'kpi-pedidos');
+  assert.equal(valorEl.textContent, '7', 'sem rAF no Node, escreve o valor final na hora');
+});

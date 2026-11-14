@@ -1,4 +1,5 @@
 // Formatação e componentes de tela. Dinheiro chega em centavos inteiros.
+import { contar } from './movimento.js';
 import { VERSAO } from './versao.js';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -99,11 +100,27 @@ export function erroCartao(el, mensagem, tentar) {
 }
 
 // Cartão de número: rótulo, valor (texto já formatado), sub e variação (html de delta()/deltaPct()).
-export function cartao(el, { rotulo, valor, sub, delta: variacao }) {
-  pronto(el);
-  el.innerHTML = `<div class="cartao-rotulo"><span>${esc(rotulo)}</span>${variacao ?? ''}</div>
+export const cartaoHtml = ({ rotulo, valor, sub, delta: variacao }) => `<div class="cartao-rotulo"><span>${esc(rotulo)}</span>${variacao ?? ''}</div>
     <div class="cartao-valor num">${esc(valor ?? '—')}</div>
     ${sub ? `<div class="cartao-sub">${esc(sub)}</div>` : ''}`;
+
+// Último elemento de valor de cada métrica: a contagem nova parte do que está na tela (troca de filtro ou de aba).
+const valorPorChave = new Map();
+
+// Opcionais: chave (nome da métrica, vira view-transition-name "kpi-<chave>" para o morph entre abas)
+// e numero + formatar (o valor conta até numero). Sem numero finito, mostra valor (ou —) sem contar.
+export function cartao(el, opcoes) {
+  const { chave, numero, formatar } = opcoes;
+  pronto(el);
+  if (chave) el.style.viewTransitionName = `kpi-${chave}`;
+  el.innerHTML = cartaoHtml(opcoes);
+  if (!Number.isFinite(numero) || typeof formatar !== 'function') return;
+  const valorEl = el.querySelector('.cartao-valor');
+  const anterior = chave ? valorPorChave.get(chave) : null;
+  if (chave) valorPorChave.set(chave, valorEl);
+  const de = anterior ? anterior._contagem?.atual ?? Number(anterior.dataset.valor) : undefined;
+  if (anterior) anterior._contagem = null; // o elemento antigo saiu da tela: para de contar
+  contar(valorEl, numero, formatar, Number.isFinite(de) ? { de } : {});
 }
 
 // Aviso amarelo quando a fonte está atrasada em relação à agenda ({fonte: {horasMax}}) ou a última coleta falhou.

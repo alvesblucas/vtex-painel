@@ -1,6 +1,7 @@
 // Shell do painel: quem sou eu → menu com as abas permitidas → rota pelo hash → view da aba.
 import { api } from './api.js';
 import { montarBarra } from './barra-filtros.js';
+import { trocarTela } from './movimento.js';
 import { LISTAS, ROTULOS_ABAS, comLista, hojeLocal, lerHash, montarHash } from './estado.js';
 import { avisoDados, carregando, erroCartao, esc, pronto, rodapeHtml } from './ui.js';
 
@@ -175,6 +176,7 @@ async function rotear() {
   const canonico = montarHash(lido.aba, lido.filtros);
   if (canonico !== window.location.hash) window.history.replaceState(null, '', canonico);
 
+  const primeira = !rota;
   const trocouAba = rota?.aba !== lido.aba;
   rota = lido;
   if (trocouAba) aplicaveisAtuais = null;
@@ -183,13 +185,21 @@ async function rotear() {
   controle = new AbortController();
   const meu = controle;
 
-  el.titulo.textContent = rotuloDe(rota.aba);
-  document.title = `${rotuloDe(rota.aba)} · ${eu.loja?.nome || 'Painel'}`;
-  raiz.querySelectorAll('.menu a[data-aba]').forEach((a) => {
-    if (a.dataset.aba === rota.aba) a.setAttribute('aria-current', 'page');
-    else a.removeAttribute('aria-current');
-  });
-  desenharBarra();
+  // Troca de aba: título, menu e #conteudo (já no carregando) mudam numa View Transition.
+  // A callback é síncrona: a transição captura o carregando e nunca espera a API.
+  const pintarTela = () => {
+    el.titulo.textContent = rotuloDe(rota.aba);
+    document.title = `${rotuloDe(rota.aba)} · ${eu.loja?.nome || 'Painel'}`;
+    raiz.querySelectorAll('.menu a[data-aba]').forEach((a) => {
+      if (a.dataset.aba === rota.aba) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    desenharBarra();
+    if (trocouAba) {
+      el.conteudo.replaceChildren();
+      carregando(el.conteudo);
+    }
+  };
 
   const ctx = {
     eu,
@@ -213,13 +223,15 @@ async function rotear() {
     },
   };
 
+  let telaTrocada;
   if (trocouAba) {
-    el.conteudo.replaceChildren();
-    carregando(el.conteudo);
+    // 1ª tela: não há de onde transicionar.
+    telaTrocada = primeira ? pintarTela() : trocarTela(pintarTela);
     window.scrollTo(0, 0);
-  }
+  } else pintarTela();
   try {
-    const mod = await carregarView(rota.aba);
+    // A view só pinta depois que a troca limpou #conteudo (senão o carregando apagaria a view).
+    const [mod] = await Promise.all([carregarView(rota.aba), telaTrocada]);
     if (meu !== controle) return;
     pronto(el.conteudo);
     if (trocouAba) el.conteudo.replaceChildren();

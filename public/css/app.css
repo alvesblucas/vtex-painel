@@ -358,7 +358,7 @@ button.barra-linha:hover, .barra-linha:focus-visible { background: rgba(255, 255
 button.barra-linha:hover .barra { filter: brightness(1.15); }
 .barra-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .barra-trilho { position: relative; height: 14px; }
-.barra { position: absolute; left: 0; top: 0; bottom: 0; background: var(--serie); border-radius: 0 4px 4px 0; min-width: 2px; }
+.barra { position: absolute; left: 0; top: 0; bottom: 0; background: var(--serie); border-radius: 0 4px 4px 0; min-width: 2px; transform-origin: left; }
 .marco { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1.5px; border-radius: 1px; background: var(--serie-ref); box-shadow: 0 0 0 2px var(--surface); }
 .barra-valor { font-size: 12px; color: var(--text); min-width: 64px; text-align: right; }
 
@@ -551,4 +551,34 @@ select.input:disabled { opacity: .5; }
   .hist-filtros .filtro-select select { flex: 1; max-width: none; }
   .hist-filtros .campo-data { flex: 1 1 140px; }
   .hist-filtros .campo-data .input { width: 100%; }
+}
+
+/* ---------- movimento (public/js/movimento.js) ----------
+   Troca de aba por View Transition (≤ 350 ms): o conteúdo faz cross-fade, o título e os KPIs
+   comuns às duas telas (kpi-faturamento, kpi-pedidos…) fazem morph; menu e lateral ficam parados.
+   Seções abaixo da dobra entram pela rolagem. Sem suporte ou com movimento reduzido: nada anima. */
+#titulo { view-transition-name: titulo; }
+.lateral { view-transition-name: lateral; }
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation-duration: var(--dur-curta); animation-timing-function: ease-out; }
+  /* padrão para os grupos com nome (kpi-* são dinâmicos) */
+  ::view-transition-group(*) { animation-duration: 300ms; animation-timing-function: var(--ease-peso); }
+  ::view-transition-group(titulo) { animation-duration: 350ms; animation-timing-function: var(--ease-peso); }
+  /* a lateral não muda entre abas: sem cross-fade nem deslocamento */
+  ::view-transition-group(lateral),
+  ::view-transition-old(lateral),
+  ::view-transition-new(lateral) { animation: none; }
+
+  @supports (animation-timeline: view()) {
+    .secao {
+      animation: secao-entra linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+    @keyframes secao-entra {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: none; }
+    }
+  }
 }

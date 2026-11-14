@@ -1,5 +1,6 @@
 // Gráficos sem dependências: linha (um eixo, comparação tracejada, cruz + dica) e barras horizontais (top 10).
 // Cores: --serie (período) e --serie-ref (comparação), validadas para o fundo escuro (validate_palette.js).
+import { crescerBarras, revelarLinha } from './movimento.js';
 import { esc, int, pronto } from './ui.js';
 
 // Escala "limpa": 0, passo, 2·passo... com passo 1/2/2,5/5 × 10^n.
@@ -22,7 +23,7 @@ function aoRedimensionar(el, desenhar) {
   el._ro = new ResizeObserver(() => {
     if (Math.abs(el.clientWidth - largura) < 8) return;
     largura = el.clientWidth;
-    desenhar();
+    desenhar(); // redesenho por largura: sem animação de entrada
   });
   el._ro.observe(el);
 }
@@ -67,7 +68,8 @@ export function linha(el, pontos, opcoes = {}) {
     el.innerHTML = `<div class="estado vazio">${pontos.length ? 'A linha aparece a partir do 2º dia.' : 'Sem dados no período.'}</div>`;
     return;
   }
-  const desenhar = () => {
+  // animar só no 1º desenho de dados novos; redesenhos por largura aparecem prontos.
+  const desenhar = (animar = false) => {
     const W = Math.max(280, el.clientWidth || 800);
     const H = W < 500 ? Math.round(altura * 0.8) : altura;
     const temRef = pontos.some((p) => p.ref != null);
@@ -96,6 +98,7 @@ export function linha(el, pontos, opcoes = {}) {
     </svg><div class="dica" role="status"></div></div>`;
 
     const svg = el.querySelector('svg');
+    if (animar) revelarLinha(svg);
     const tip = el.querySelector('.dica');
     const cruz = svg.querySelector('.cruz');
     const foco = svg.querySelector('.foco');
@@ -150,8 +153,8 @@ export function linha(el, pontos, opcoes = {}) {
       mostrar(Math.max(0, Math.min(n - 1, (atual < 0 ? n - 1 : atual) + mapa[ev.key])));
     });
   };
-  desenhar();
-  aoRedimensionar(el, desenhar);
+  desenhar(true);
+  aoRedimensionar(el, () => desenhar());
 }
 
 /**
@@ -212,4 +215,5 @@ export function barras(el, itens, opcoes = {}) {
     linhaEl.addEventListener('blur', esconder);
     caixa.append(linhaEl);
   });
+  crescerBarras(caixa);
 }
