@@ -70,7 +70,7 @@ const STATUS = { ok: 'ok', aviso: 'atenção', erro: 'problema', fora: 'fora do 
 export const pill = (status, texto) => `<span class="pill st-${esc(status)}"><i aria-hidden="true"></i>${esc(texto || STATUS[status] || status)}</span>`;
 
 // Rodapé do produto (crédito do autor), igual em toda instância.
-export const rodapeHtml = () => `<footer class="rodape"><span>vtex-painel · v${esc(VERSAO)}</span>
+export const rodapeHtml = () => `<footer class="rodape"><span>Painel · v${esc(VERSAO)}</span>
   <a href="https://github.com/alvesblucas" target="_blank" rel="noopener">Designed &amp; developed by Lucas Alves</a></footer>`;
 
 // Tira o estado "recarregando" que carregando() põe quando já havia conteúdo.
@@ -114,7 +114,7 @@ export function erroCartao(el, mensagem, tentar) {
 // O valor não quebra linha; se não couber, a reticência corta a vista e o title guarda o valor inteiro.
 export const cartaoHtml = ({ rotulo, valor, sub, delta: variacao, icone: nomeIcone }) => {
   const svg = nomeIcone ? icone(nomeIcone) : '';
-  return `<div class="cartao-topo"><div class="cartao-rotulo">${esc(rotulo)}</div>${svg ? `<span class="cartao-icone">${svg}</span>` : ''}</div>
+  return `<div class="cartao-topo"><div class="cartao-rotulo" title="${esc(rotulo)}">${esc(rotulo)}</div>${svg ? `<span class="cartao-icone">${svg}</span>` : ''}</div>
     <div class="cartao-valor num"${valor != null && valor !== '—' ? ` title="${esc(valor)}"` : ''}>${esc(valor ?? '—')}</div>
     ${variacao || sub ? `<div class="cartao-pe">${variacao ?? ''}${sub ? `<span class="cartao-sub">${esc(sub)}</span>` : ''}</div>` : ''}`;
 };

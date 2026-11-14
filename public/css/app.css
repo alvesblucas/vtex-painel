@@ -135,7 +135,7 @@ h2 { font-size: 15px; line-height: 20px; }
   background: linear-gradient(180deg, var(--accent), var(--accent-2));
 }
 .menu a:focus-visible { outline-offset: -2px; border-radius: var(--radius); }
-.menu .selo { margin-left: auto; }
+.menu .selo { margin-left: auto; height: 18px; padding: 0 6px; font-size: 9px; }
 .menu-externo { margin-left: auto; color: var(--grupo); font-size: 12px; }
 .menu-sep { color: var(--grupo); font-size: 10.5px; line-height: 14px; letter-spacing: .16em; text-transform: uppercase; padding: 16px 10px 8px; }
 .menu-sep:empty { padding: 0; margin: 14px 10px 8px; border-top: 1px solid var(--rule); }
@@ -149,7 +149,7 @@ h2 { font-size: 15px; line-height: 20px; }
 .lateral-nome { font-size: 12.5px; line-height: 17px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lateral-perfil { font-size: 11px; line-height: 15px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .selo {
-  display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 999px; font-size: 9px;
+  display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 10.5px;
   letter-spacing: .08em; text-transform: uppercase; color: var(--grupo); border: 1px solid var(--border); background: transparent; white-space: nowrap;
 }
 .selo-aviso { color: var(--warn); } .selo-erro { color: var(--bad); }
@@ -222,7 +222,7 @@ h2 { font-size: 15px; line-height: 20px; }
 .seta { color: var(--muted); font-size: 10px; }
 .btn-limpar {
   height: 36px; padding: 0 4px; color: var(--muted); font-size: 13px;
-  text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 6px;
+  text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 6px;
 }
 .btn-limpar:hover { color: var(--text); text-decoration-color: currentColor; }
 
@@ -285,7 +285,7 @@ input[type="date"].input { color-scheme: dark; font-family: var(--mono); font-si
 .btn:disabled { opacity: .4; }
 /* botão principal: degradê com texto branco (versão escurecida do degradê, para AA; ver o topo) */
 .btn.primario { background: var(--grad-texto); border-color: transparent; color: #fff; font-weight: 500; }
-.btn.primario:hover:not(:disabled) { color: #fff; background: var(--grad-texto); border-color: transparent; filter: brightness(1.1); }
+.btn.primario:hover:not(:disabled) { color: #fff; background: var(--grad-texto); border-color: transparent; box-shadow: 0 0 0 1px var(--accent-texto); }
 
 /* ---------- avisos ---------- */
 .avisos { padding: 12px var(--gutter) 0; display: flex; flex-direction: column; gap: 6px; }
@@ -549,10 +549,10 @@ button.barra-linha:hover .pilha { filter: brightness(1.15); }
 @media (max-width: 600px) {
   .cartoes .s3, .cartoes .s4 { grid-column: span 6; }
   .grade.cartoes { gap: 10px; }
-  .cartoes .card { padding: 12px 12px 10px; min-height: 148px; } /* pé em até duas linhas (pílula + sub) */
+  .cartoes .card { padding: 12px 12px 10px; min-height: 134px; } /* rótulo em até duas linhas + pé em até duas (pílula + sub) */
   .cartoes .cartao-valor { font-size: 22px; line-height: 28px; letter-spacing: -.03em; margin: 8px 0 6px; }
-  .cartoes .cartao-rotulo { font-size: 10px; letter-spacing: .08em; }
-  .cartoes .cartao-topo { min-height: 22px; }
+  .cartoes .cartao-rotulo { font-size: 10px; line-height: 13px; letter-spacing: .08em; white-space: normal; overflow: visible; text-overflow: clip; } /* quebra em 2 linhas, sem reticência */
+  .cartoes .cartao-topo { min-height: 26px; align-items: flex-start; }
   .cartoes .cartao-icone { width: 22px; height: 22px; }
   .cartoes .cartao-icone .icone { width: 12px; height: 12px; }
   /* esqueleto com a mesma altura do cartão pintado (valor de 28 px e margens menores no celular) */
@@ -571,7 +571,7 @@ button.barra-linha:hover .pilha { filter: brightness(1.15); }
 .view.admin { gap: 22px; }
 .admin .card-head { margin-bottom: 18px; }
 
-/* abas internas (Pessoas, Perfis, Histórico): texto + sublinhado, como o menu */
+/* abas internas (Pessoas, Perfis, Histórico): texto + sublinhado no item ativo (sem caixa) */
 .abas-internas {
   display: flex; align-self: stretch; gap: 28px; padding: 0; border: 0; border-bottom: 1px solid var(--rule);
   border-radius: 0; background: none;

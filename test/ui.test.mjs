@@ -39,6 +39,7 @@ test('cartaoHtml: delta vira pílula, delta nulo não gera pílula, ícone opcio
   assert.match(comIcone, /aria-hidden="true"/);
   assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7' }), /<svg|cartao-icone/);
   assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7', icone: 'inexistente' }), /cartao-icone/);
+  assert.match(cartaoHtml({ rotulo: 'Pedidos de novos', valor: '7' }), /class="cartao-rotulo" title="Pedidos de novos"/);
 });
 
 test('avisoDados: cada aviso traz a pílula do estado', async () => {
@@ -118,7 +119,8 @@ test('rodapeHtml: crédito com link e versão do produto', async () => {
   assert.ok(link, 'link para o GitHub do autor');
   assert.match(link, /rel="noopener"/);
   assert.match(link, /target="_blank"/);
-  assert.ok(html.includes(`vtex-painel · v${VERSAO}`));
+  assert.ok(html.includes(`<span>Painel · v${VERSAO}</span>`));
+  assert.ok(!html.includes('vtex-painel'));
 });
 
 test('cartao sem número e com valor nulo mostra — sem contar (Review Focus 4)', async () => {
@@ -157,8 +159,8 @@ test('cartaoHtml: valor longo nunca some calado; o title guarda o valor inteiro'
   const { cartaoHtml } = await import('../public/js/ui.js');
   const html = cartaoHtml({ rotulo: 'Faturamento', valor: 'R$ 12.345.678.901,23' });
   assert.ok(html.includes('class="cartao-valor num" title="R$ 12.345.678.901,23">'), html);
-  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: null }), /title=/);
-  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '—' }), /title=/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: null }), /cartao-valor num" title=/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '—' }), /cartao-valor num" title=/);
 });
 
 // Cartão falso: o que pronto(), cartao() e contar() usam.
