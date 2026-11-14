@@ -7,12 +7,14 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
 
 const reais = (c, casas = 2) => (c / 100).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 export const brl = (c) => (c == null ? '—' : `R$ ${reais(c)}`);
-export const brlK = (c) => {
+// ref (opcional) escolhe a unidade: na contagem é o valor final, para a unidade não trocar no meio.
+export const brlK = (c, ref = c) => {
   if (c == null) return '—';
   const r = Math.abs(c) / 100;
+  const u = Math.abs(Number.isFinite(ref) ? ref : c) / 100;
   const sinal = c < 0 ? '-' : '';
-  if (r >= 1e6) return `${sinal}R$ ${(r / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
-  if (r >= 1e4) return `${sinal}R$ ${(r / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
+  if (u >= 1e6) return `${sinal}R$ ${(r / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
+  if (u >= 1e4) return `${sinal}R$ ${(r / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
   return brl(c);
 };
 // Eixo: compacto a partir de R$ 10 mil, sem centavos abaixo disso.
@@ -109,20 +111,22 @@ export const cartaoHtml = ({ rotulo, valor, sub, delta: variacao }) => `<div cla
 // Último elemento de valor de cada métrica: a contagem nova parte do que está na tela (troca de filtro ou de aba).
 const valorPorChave = new Map();
 
-// Opcionais: chave (nome da métrica, vira view-transition-name "kpi-<chave>" para o morph entre abas)
-// e numero + formatar (o valor conta até numero). Sem numero finito, mostra valor (ou —) sem contar.
+// Opcionais: chave (nome da métrica, vira view-transition-name "kpi-<chave>" para o morph entre abas),
+// contagem (só a memória da contagem, sem morph; padrão = chave) e numero + formatar (o valor conta
+// até numero). formatar recebe (valor, numero): formatos com unidade (brlK) a fixam pelo valor final.
+// Sem numero finito, mostra valor (ou —) sem contar.
 export function cartao(el, opcoes) {
-  const { chave, numero, formatar } = opcoes;
+  const { chave, contagem = chave, numero, formatar } = opcoes;
   pronto(el);
   if (chave) el.style.viewTransitionName = `kpi-${chave}`;
   el.innerHTML = cartaoHtml(opcoes);
   if (!Number.isFinite(numero) || typeof formatar !== 'function') return;
   const valorEl = el.querySelector('.cartao-valor');
-  const anterior = chave ? valorPorChave.get(chave) : null;
-  if (chave) valorPorChave.set(chave, valorEl);
+  const anterior = contagem ? valorPorChave.get(contagem) : null;
+  if (contagem) valorPorChave.set(contagem, valorEl);
   const de = anterior ? anterior._contagem?.atual ?? Number(anterior.dataset.valor) : undefined;
   if (anterior) anterior._contagem = null; // o elemento antigo saiu da tela: para de contar
-  contar(valorEl, numero, formatar, Number.isFinite(de) ? { de } : {});
+  contar(valorEl, numero, (v) => formatar(v, numero), Number.isFinite(de) ? { de } : {});
 }
 
 // Aviso amarelo quando a fonte está atrasada em relação à agenda ({fonte: {horasMax}}) ou a última coleta falhou.

@@ -112,3 +112,12 @@ test('trocarTela devolve updateCallbackDone da transição (quem pinta depois es
   assert.equal(trocarTela(() => {}, { doc, reduzido: false }), feito);
   assert.equal(trocarTela(() => {}, { doc: {} }), undefined);
 });
+
+test('crescerBarras: animate() que lança não derruba a pintura', async () => {
+  const { crescerBarras } = await import('../public/js/movimento.js');
+  let chamadas = 0;
+  const barra = { animate() { chamadas++; throw new Error('fora do layout'); } };
+  const el = { querySelectorAll: () => [barra, barra] };
+  assert.doesNotThrow(() => crescerBarras(el, { reduzido: false }));
+  assert.equal(chamadas, 2, 'uma barra que falha não impede as outras');
+});

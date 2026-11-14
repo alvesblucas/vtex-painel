@@ -2,8 +2,8 @@
 import { rotuloValor } from '../barra-filtros.js';
 import { LISTAS } from '../estado.js';
 import { barras, linha } from '../graficos.js';
-import { brl, brlEixo, brlK, cartao, CSV_MAX_SERVIDOR, delta, dm, dma, erroCartao, esc, int, semana, tabela } from '../ui.js';
-import { bloco, cartoesEsqueleto, estrutura, rotuloCmp, semDados, temCmp } from './comum.js';
+import { brl, brlEixo, brlK, CSV_MAX_SERVIDOR, delta, dm, dma, erroCartao, esc, int, semana, tabela } from '../ui.js';
+import { bloco, cartoesEsqueleto, estrutura, pintarFileira, rotuloCmp, semDados, temCmp } from './comum.js';
 
 const SEM_CHAVE = '(não informado)';
 const QUEBRAS = [
@@ -133,11 +133,9 @@ function pintarResumo(el, d, vv, f) {
     vv && { rotulo: 'Faturamento', valor: brlK(a.valor), sub: c ? antes(brlK(c.valor)) : brl(a.valor), delta: c ? delta(a.valor, c.valor) : '', chave: 'faturamento', numero: a.valor, formatar: brlK },
     { rotulo: 'Pedidos', valor: int(a.pedidos), sub: antes(int(c?.pedidos)), delta: c ? delta(a.pedidos, c.pedidos) : '', chave: 'pedidos', numero: a.pedidos, formatar: int },
     vv && { rotulo: 'Ticket médio', valor: brl(a.ticket), sub: antes(brl(c?.ticket)), delta: c ? delta(a.ticket, c.ticket) : '', chave: 'ticket', numero: a.ticket, formatar: brl },
-    { rotulo: 'Cancelados', valor: int(a.cancelados), sub: antes(int(c?.cancelados)), delta: c ? delta(a.cancelados, c.cancelados, { subirEhBom: false }) : '', numero: a.cancelados, formatar: int },
+    { rotulo: 'Cancelados', valor: int(a.cancelados), sub: antes(int(c?.cancelados)), delta: c ? delta(a.cancelados, c.cancelados, { subirEhBom: false }) : '', contagem: 'cancelados', numero: a.cancelados, formatar: int },
   ].filter(Boolean);
-  const classe = vv ? 's3' : 's6';
-  el.innerHTML = `<div class="grade cartoes">${cartoes.map(() => `<div class="card ${classe}"></div>`).join('')}</div>`;
-  el.querySelectorAll('.card').forEach((card, i) => cartao(card, cartoes[i]));
+  pintarFileira(el, cartoes, vv ? 's3' : 's6');
 }
 
 // ---------- série por dia ----------

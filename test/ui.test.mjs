@@ -130,3 +130,54 @@ test('cartaoHtml: valor longo nunca some calado; o title guarda o valor inteiro'
   assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: null }), /title=/);
   assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '—' }), /title=/);
 });
+
+// Cartão falso: o que pronto(), cartao() e contar() usam.
+const cartaoFalso = () => {
+  const valorEl = { textContent: '', dataset: {} };
+  return { valorEl, el: { innerHTML: '', style: {}, classList: { remove() {} }, removeAttribute() {}, querySelector: () => valorEl } };
+};
+
+// rAF guardado (não roda): o 1º texto escrito por contar() é formatar(de), o ponto de partida da contagem.
+async function comRafParado(fn) {
+  const antes = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = () => 0;
+  try {
+    return await fn();
+  } finally {
+    if (antes === undefined) delete globalThis.requestAnimationFrame;
+    else globalThis.requestAnimationFrame = antes;
+  }
+}
+
+test('cartao com contagem (sem chave) parte do valor anterior e não ganha nome de morph', async () => {
+  const { cartao } = await import('../public/js/ui.js');
+  const a = cartaoFalso();
+  cartao(a.el, { rotulo: 'Cancelados', valor: '5', contagem: 'teste-cancelados', numero: 5, formatar: String });
+  assert.equal(a.valorEl.textContent, '5');
+  await comRafParado(() => {
+    const b = cartaoFalso();
+    cartao(b.el, { rotulo: 'Cancelados', valor: '9', contagem: 'teste-cancelados', numero: 9, formatar: String });
+    assert.equal(b.valorEl.textContent, '5', 'contagem começa em 5 (o valor anterior), não em 0');
+    assert.equal(b.valorEl.dataset.valor, 9);
+    assert.equal(b.el.style.viewTransitionName, undefined, 'contagem não dá view-transition-name');
+    // Sem contagem nem chave: parte do zero.
+    const c = cartaoFalso();
+    cartao(c.el, { rotulo: 'X', valor: '9', numero: 9, formatar: String });
+    assert.equal(c.valorEl.textContent, '0');
+  });
+});
+
+test('brlK com ref: a unidade vem do valor final, os intermediários não trocam de unidade', async () => {
+  const { brlK, cartao } = await import('../public/js/ui.js');
+  assert.equal(limpo(brlK(1_890_000, 935_506)), 'R$ 18.900,00');
+  assert.equal(limpo(brlK(935_506, 1_890_000)), 'R$ 9,4 mil');
+  assert.equal(limpo(brlK(935_506)), 'R$ 9.355,06');
+  const a = cartaoFalso();
+  cartao(a.el, { rotulo: 'Faturamento', valor: brlK(1_890_000), contagem: 'teste-fat', numero: 1_890_000, formatar: brlK });
+  assert.equal(limpo(a.valorEl.textContent), 'R$ 18,9 mil');
+  await comRafParado(() => {
+    const b = cartaoFalso();
+    cartao(b.el, { rotulo: 'Faturamento', valor: brlK(935_506), contagem: 'teste-fat', numero: 935_506, formatar: brlK });
+    assert.equal(limpo(b.valorEl.textContent), 'R$ 18.900,00', 'ponto de partida já na unidade do valor final');
+  });
+});

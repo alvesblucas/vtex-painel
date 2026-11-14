@@ -1,7 +1,7 @@
 // Visão geral: cartões das abas permitidas → "Precisa de atenção" → atalhos para as abas.
 import { montarHash } from '../estado.js';
-import { brl, brlK, cartao, deltaPct, esc, int, num1 } from '../ui.js';
-import { bloco, cartoesEsqueleto, estrutura, rotuloCmp } from './comum.js';
+import { brl, brlK, deltaPct, esc, int, num1 } from '../ui.js';
+import { bloco, cartoesEsqueleto, estrutura, pintarFileira, rotuloCmp } from './comum.js';
 
 const ATALHOS = {
   vendas: ['Vendas', 'faturamento, origens, marcas e produtos'],
@@ -16,7 +16,8 @@ const PRONTAS = new Set(['vendas', 'clientes']);
 
 const pctTxt = (n) => `${num1(n)}%`;
 
-// chave = morph entre abas (as mesmas de Vendas); numero + formatar = contagem do valor.
+// chave = morph entre abas (as mesmas de Vendas); numero + formatar = contagem do valor;
+// contagem = só a memória da contagem (sem morph), para o número partir do valor anterior.
 function cartoesDe(c, eu, f) {
   const lista = [];
   const v = c.vendas;
@@ -33,7 +34,7 @@ function cartoesDe(c, eu, f) {
     }
   }
   if (c.clientes) {
-    lista.push({ rotulo: 'Clientes novos', valor: pctTxt(c.clientes.pctNovos), sub: `${int(c.clientes.novos)} pedidos de novos (site)`, numero: c.clientes.pctNovos, formatar: pctTxt });
+    lista.push({ rotulo: 'Clientes novos', valor: pctTxt(c.clientes.pctNovos), sub: `${int(c.clientes.novos)} pedidos de novos (site)`, contagem: 'pct-novos', numero: c.clientes.pctNovos, formatar: pctTxt });
   }
   return lista;
 }
@@ -108,8 +109,7 @@ function pintarCartoes(el, lista, classe) {
   el.dataset.pintado = '1';
   el.classList.remove('recarregando');
   el.removeAttribute('aria-busy');
-  el.innerHTML = `<div class="grade cartoes">${lista.map(() => `<div class="card ${classe}"></div>`).join('')}</div>`;
-  el.querySelectorAll('.card').forEach((card, i) => cartao(card, lista[i]));
+  pintarFileira(el, lista, classe);
 }
 
 function pintarAlertas(el, alertas, eu, f) {

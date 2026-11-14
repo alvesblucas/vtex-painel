@@ -111,11 +111,15 @@ export function crescerBarras(el, { reduzido: r = reduzido() } = {}) {
   const atrasoMax = DUR_LONGA - DUR_MEDIA;
   lista.forEach((b, i) => {
     if (!anima(b)) return;
-    b.animate([{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], {
-      duration: DUR_MEDIA,
-      delay: Math.min(i * PASSO_BARRAS, atrasoMax),
-      easing,
-      fill: 'backwards',
-    });
+    try {
+      b.animate([{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], {
+        duration: DUR_MEDIA,
+        delay: Math.min(i * PASSO_BARRAS, atrasoMax),
+        easing,
+        fill: 'backwards',
+      });
+    } catch {
+      // sem animação: a barra já está no tamanho final
+    }
   });
 }

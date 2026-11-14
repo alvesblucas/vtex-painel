@@ -98,7 +98,7 @@ export function linha(el, pontos, opcoes = {}) {
       <path d="${area}" class="area" fill="url(#${idArea})"/>
       ${temRef ? `<path d="${caminho('ref')}" class="traco-ref"/>` : ''}
       <path d="${caminho('y')}" class="traco-serie"/>
-      ${(W - m.l - m.r) / n >= 16 ? pontos.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.y)}" r="4" class="ponto"/>`).join('') : `<circle cx="${x(n - 1)}" cy="${y(ultimo.y)}" r="4" class="ponto"/>`}
+      ${(W - m.l - m.r) / n >= 16 ? pontos.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.y)}" r="3" class="ponto"/>`).join('') : `<circle cx="${x(n - 1)}" cy="${y(ultimo.y)}" r="3" class="ponto"/>`}
       <line class="cruz" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>
       <circle class="foco" r="5" visibility="hidden"/>
       <circle class="foco-ref" r="4" visibility="hidden"/>
