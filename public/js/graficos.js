@@ -1,5 +1,6 @@
 // Gráficos sem dependências: linha (um eixo, comparação tracejada, cruz + dica) e barras horizontais (top 10).
-// Cores: --serie (período) e --serie-ref (comparação), validadas para o fundo escuro (validate_palette.js).
+// Cores: período em degradê --accent → --accent-2 (linha) ou --accent (barras); comparação em --serie-ref
+// (tracejada / marcador). Contraste ≥ 3:1 sobre o bloco, ver o topo do app.css.
 import { crescerBarras, revelarLinha } from './movimento.js';
 import { esc, int, pronto } from './ui.js';
 
@@ -70,7 +71,10 @@ export function linha(el, pontos, opcoes = {}) {
     el.innerHTML = `<div class="estado vazio">${pontos.length ? 'A linha aparece a partir do 2º dia.' : 'Sem dados no período.'}</div>`;
     return;
   }
-  const idArea = `area-${++idGrafico}`;
+  // ids únicos por gráfico: duas linhas na mesma tela não podem dividir o degradê.
+  const n0 = ++idGrafico;
+  const idArea = `area-${n0}`;
+  const idTraco = `traco-${n0}`;
   // animar só no 1º desenho de dados novos; redesenhos por largura aparecem prontos.
   const desenhar = (animar = false) => {
     const W = Math.max(280, el.clientWidth || 800);
@@ -86,21 +90,22 @@ export function linha(el, pontos, opcoes = {}) {
     const caminho = (k) => pontos.map((p, i) => (p[k] == null ? '' : `${i && pontos[i - 1][k] != null ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[k]).toFixed(1)}`)).join('');
     const passo = Math.max(1, Math.ceil(n / Math.max(3, Math.floor(W / 90))));
     const ultimo = pontos[n - 1];
-    // Área suave sob a linha do período (degradê do branco a transparente), fechada na base do gráfico.
+    // Área azul suave sob a linha do período (do acento a transparente), fechada na base do gráfico.
     const base = y(0).toFixed(1);
     const area = `M${x(0).toFixed(1)},${base}${pontos.map((p, i) => `L${x(i).toFixed(1)},${y(p.y ?? 0).toFixed(1)}`).join('')}L${x(n - 1).toFixed(1)},${base}Z`;
 
     el.innerHTML = `${temRef ? `<div class="legenda"><span><i class="chave-serie"></i>${esc(rotulo)}</span><span><i class="chave-ref"></i>${esc(rotuloRef)}</span></div>` : ''}
       <div class="grafico"><svg viewBox="0 0 ${W} ${H}" role="img" tabindex="0" aria-label="${esc(titulo)}. Use as setas para percorrer os dias.">
-      <defs><linearGradient id="${idArea}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" class="area-topo"/><stop offset="1" class="area-base"/></linearGradient></defs>
+      <defs><linearGradient id="${idArea}" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}"><stop offset="0" class="area-topo"/><stop offset="1" class="area-base"/></linearGradient>
+        <linearGradient id="${idTraco}" gradientUnits="userSpaceOnUse" x1="${m.l}" x2="${W - m.r}" y1="0" y2="0"><stop offset="0" class="serie-ini"/><stop offset="1" class="serie-fim"/></linearGradient></defs>
       ${ticks.map((t) => `<line class="grade-linha" x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}"/><text class="eixo" x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end">${esc(fmtY(t))}</text>`).join('')}
       ${pontos.map((p, i) => ((i % passo === 0 && n - 1 - i >= passo) || i === n - 1 ? `<text class="eixo" x="${x(i)}" y="${H - 6}" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}">${esc(p.x)}</text>` : '')).join('')}
       <path d="${area}" class="area" fill="url(#${idArea})"/>
       ${temRef ? `<path d="${caminho('ref')}" class="traco-ref"/>` : ''}
-      <path d="${caminho('y')}" class="traco-serie"/>
-      ${(W - m.l - m.r) / n >= 16 ? pontos.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.y)}" r="3" class="ponto"/>`).join('') : `<circle cx="${x(n - 1)}" cy="${y(ultimo.y)}" r="3" class="ponto"/>`}
+      <path d="${caminho('y')}" class="traco-serie" stroke="url(#${idTraco})"/>
+      ${(W - m.l - m.r) / n >= 16 ? pontos.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.y)}" r="3" class="ponto" fill="url(#${idTraco})"/>`).join('') : `<circle cx="${x(n - 1)}" cy="${y(ultimo.y)}" r="3" class="ponto" fill="url(#${idTraco})"/>`}
       <line class="cruz" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>
-      <circle class="foco" r="5" visibility="hidden"/>
+      <circle class="foco" r="5" fill="url(#${idTraco})" visibility="hidden"/>
       <circle class="foco-ref" r="4" visibility="hidden"/>
       <rect x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent"/>
     </svg><div class="dica" role="status"></div></div>`;

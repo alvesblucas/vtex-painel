@@ -1,6 +1,6 @@
 // Clientes (só pedidos do site): cartões → novo × recorrente por origem (clique filtra) → % de novos por semana.
 import { linha } from '../graficos.js';
-import { brlK, dma, esc, int, num1 } from '../ui.js';
+import { brlK, classeVariacao, dma, esc, int, num1 } from '../ui.js';
 import { bloco, cartoesEsqueleto, estrutura, pintarFileira, rotuloCmp, semDados } from './comum.js';
 
 const APLICAVEIS = ['periodo', 'cmp', 'origem', 'pagamento', 'uf', 'cidade', 'entrega'];
@@ -10,9 +10,8 @@ const pctTxt = (n) => `${num1(n)}%`;
 function deltaPp(atual, antes) {
   if (antes == null) return '';
   const d = Math.round((atual - antes) * 10) / 10;
-  const dir = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
   const seta = d > 0 ? '▲' : d < 0 ? '▼' : '=';
-  return `<span class="delta ${dir} num" title="em pontos percentuais">${seta} ${num1(Math.abs(d))} p.p.</span>`;
+  return `<span class="pill ${classeVariacao(d)}" title="em pontos percentuais">${seta} ${num1(Math.abs(d))} p.p.</span>`;
 }
 
 export async function render(el, ctx) {
@@ -58,10 +57,10 @@ function pintarCartoes(el, d, ctx) {
   const vv = ctx.eu.verValores;
   const sub = (t) => (vv && d[t].valor != null ? brlK(d[t].valor) : `${num1((d[t].pedidos / total) * 100)}% dos pedidos`);
   const lista = [
-    { rotulo: 'Clientes novos', valor: pctTxt(d.pctNovos), contagem: 'pct-novos', numero: d.pctNovos, formatar: pctTxt, sub: d.cmp ? `${rotuloCmp(ctx.filtros)}: ${pctTxt(d.cmp.pctNovos)}` : 'novos ÷ (novos + recorrentes)', delta: d.cmp ? deltaPp(d.pctNovos, d.cmp.pctNovos) : '' },
-    { rotulo: 'Pedidos de novos', valor: int(d.novo.pedidos), contagem: 'pedidos-novos', numero: d.novo.pedidos, formatar: int, sub: sub('novo') },
-    { rotulo: 'Pedidos de recorrentes', valor: int(d.recorrente.pedidos), contagem: 'pedidos-recorrentes', numero: d.recorrente.pedidos, formatar: int, sub: sub('recorrente') },
-    { rotulo: 'Indefinidos', valor: int(d.indefinido.pedidos), contagem: 'indefinidos', numero: d.indefinido.pedidos, formatar: int, sub: 'sem histórico do cliente' },
+    { rotulo: 'Clientes novos', icone: 'percentual', valor: pctTxt(d.pctNovos), contagem: 'pct-novos', numero: d.pctNovos, formatar: pctTxt, sub: d.cmp ? `${rotuloCmp(ctx.filtros)}: ${pctTxt(d.cmp.pctNovos)}` : 'novos ÷ (novos + recorrentes)', delta: d.cmp ? deltaPp(d.pctNovos, d.cmp.pctNovos) : '' },
+    { rotulo: 'Pedidos de novos', icone: 'clientes', valor: int(d.novo.pedidos), contagem: 'pedidos-novos', numero: d.novo.pedidos, formatar: int, sub: sub('novo') },
+    { rotulo: 'Pedidos de recorrentes', icone: 'clientes', valor: int(d.recorrente.pedidos), contagem: 'pedidos-recorrentes', numero: d.recorrente.pedidos, formatar: int, sub: sub('recorrente') },
+    { rotulo: 'Indefinidos', icone: 'clientes', valor: int(d.indefinido.pedidos), contagem: 'indefinidos', numero: d.indefinido.pedidos, formatar: int, sub: 'sem histórico do cliente' },
   ];
   pintarFileira(el, lista, 's3');
 }

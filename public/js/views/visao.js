@@ -24,17 +24,17 @@ function cartoesDe(c, eu, f) {
   if (v) {
     const d = deltaPct(v.delta);
     const sub = v.pedidos ? `vs ${rotuloCmp(f).toLowerCase()}` : 'sem vendas no período';
-    const pedidos = { rotulo: 'Pedidos', valor: int(v.pedidos), chave: 'pedidos', numero: v.pedidos, formatar: int };
+    const pedidos = { rotulo: 'Pedidos', icone: 'sacola', valor: int(v.pedidos), chave: 'pedidos', numero: v.pedidos, formatar: int };
     if (eu.verValores) {
-      lista.push({ rotulo: 'Faturamento', valor: brlK(v.valor), sub: v.pedidos ? brl(v.valor) : sub, delta: f.cmp === 'nenhum' ? '' : d, chave: 'faturamento', numero: v.valor, formatar: brlK });
+      lista.push({ rotulo: 'Faturamento', icone: 'dinheiro', valor: brlK(v.valor), sub: v.pedidos ? brl(v.valor) : sub, delta: f.cmp === 'nenhum' ? '' : d, chave: 'faturamento', numero: v.valor, formatar: brlK });
       lista.push({ ...pedidos, sub: v.pedidos ? '' : sub });
-      lista.push({ rotulo: 'Ticket médio', valor: brl(v.ticket), chave: 'ticket', numero: v.ticket, formatar: brl });
+      lista.push({ rotulo: 'Ticket médio', icone: 'ticket', valor: brl(v.ticket), chave: 'ticket', numero: v.ticket, formatar: brl });
     } else {
       lista.push({ ...pedidos, sub, delta: f.cmp === 'nenhum' ? '' : d });
     }
   }
   if (c.clientes) {
-    lista.push({ rotulo: 'Clientes novos', valor: pctTxt(c.clientes.pctNovos), sub: `${int(c.clientes.novos)} pedidos de novos (site)`, contagem: 'pct-novos', numero: c.clientes.pctNovos, formatar: pctTxt });
+    lista.push({ rotulo: 'Clientes novos', icone: 'percentual', valor: pctTxt(c.clientes.pctNovos), sub: `${int(c.clientes.novos)} pedidos de novos (site)`, contagem: 'pct-novos', numero: c.clientes.pctNovos, formatar: pctTxt });
   }
   return lista;
 }

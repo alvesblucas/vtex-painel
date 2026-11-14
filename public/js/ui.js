@@ -1,4 +1,5 @@
 // Formatação e componentes de tela. Dinheiro chega em centavos inteiros.
+import { icone } from './icones.js';
 import { contar } from './movimento.js';
 import { VERSAO } from './versao.js';
 
@@ -45,15 +46,21 @@ export function ha(iso) {
   return `há ${d} dia${d > 1 ? 's' : ''}`;
 }
 
-// Variação percentual já calculada (ex.: 12.5) → seta, cor e número.
+// Classe da pílula de variação: up = melhorou (verde), dn = piorou caindo (vermelho),
+// wn = piorou subindo, quando subir é ruim (âmbar; ex.: cancelados), fl = sem mudança. A seta dá a direção.
+export function classeVariacao(r, subirEhBom = true) {
+  if (r === 0) return 'fl';
+  if ((r > 0) === subirEhBom) return 'up';
+  return r > 0 ? 'wn' : 'dn';
+}
+
+// Variação percentual já calculada (ex.: 12.5) → pílula com seta e número. Sem base: só "—", sem pílula.
 export function deltaPct(p, { subirEhBom = true } = {}) {
-  if (p == null || !Number.isFinite(p)) return '<span class="delta flat" title="sem base de comparação">—</span>';
+  if (p == null || !Number.isFinite(p)) return '<span class="delta-nulo" title="sem base de comparação">—</span>';
   const r = Math.round(p * 10) / 10;
-  const dir = r > 0 ? 'up' : r < 0 ? 'down' : 'flat';
-  const bom = r === 0 ? 'flat' : (r > 0) === subirEhBom ? 'up' : 'down';
-  const seta = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '=';
+  const seta = r > 0 ? '▲' : r < 0 ? '▼' : '=';
   const txt = Math.abs(r).toLocaleString('pt-BR', { maximumFractionDigits: Math.abs(r) < 10 ? 1 : 0 });
-  return `<span class="delta ${bom} num">${seta} ${txt}%</span>`;
+  return `<span class="pill ${classeVariacao(r, subirEhBom)}">${seta} ${txt}%</span>`;
 }
 
 // Variação de a sobre b.
@@ -101,12 +108,16 @@ export function erroCartao(el, mensagem, tentar) {
   }
 }
 
-// Cartão de número: rótulo, valor (texto já formatado), sub e variação (html de delta()/deltaPct()).
-// Ordem da mockup: rótulo em caixa alta → valor grande → variação e sub numa linha abaixo.
+// Cartão de número: rótulo, ícone (nome de icones.js, opcional), valor (texto já formatado), sub e variação
+// (html de delta()/deltaPct(): a pílula). Ordem da mockup: rótulo em caixa alta e ícone à direita → valor grande →
+// pílula e sub numa linha abaixo. O ícone fica no miolo do .card (o elemento com o nome do morph não muda).
 // O valor não quebra linha; se não couber, a reticência corta a vista e o title guarda o valor inteiro.
-export const cartaoHtml = ({ rotulo, valor, sub, delta: variacao }) => `<div class="cartao-rotulo">${esc(rotulo)}</div>
+export const cartaoHtml = ({ rotulo, valor, sub, delta: variacao, icone: nomeIcone }) => {
+  const svg = nomeIcone ? icone(nomeIcone) : '';
+  return `<div class="cartao-topo"><div class="cartao-rotulo">${esc(rotulo)}</div>${svg ? `<span class="cartao-icone">${svg}</span>` : ''}</div>
     <div class="cartao-valor num"${valor != null && valor !== '—' ? ` title="${esc(valor)}"` : ''}>${esc(valor ?? '—')}</div>
     ${variacao || sub ? `<div class="cartao-pe">${variacao ?? ''}${sub ? `<span class="cartao-sub">${esc(sub)}</span>` : ''}</div>` : ''}`;
+};
 
 // Último elemento de valor de cada métrica: a contagem nova parte do que está na tela (troca de filtro ou de aba).
 const valorPorChave = new Map();
@@ -155,14 +166,15 @@ export function avisoDados(el, coletas = [], agenda = {}, { agora = Date.now(), 
     const c = porFonte.get(fonte);
     const horasMax = Number(agenda[fonte]?.horasMax);
     if (!c) {
-      avisos.push(`Coleta de ${fonte}: nenhuma coleta concluída`);
+      avisos.push(['aviso', 'sem coleta', `Coleta de ${fonte}: nenhuma coleta concluída`]);
     } else if (!c.ok) {
-      avisos.push(`Última coleta de ${fonte} falhou (${quando(c.quando, fusoHoras)}) — dados podem estar incompletos`);
+      avisos.push(['erro', 'falhou', `Última coleta de ${fonte} falhou (${quando(c.quando, fusoHoras)}) — dados podem estar incompletos`]);
     } else if (Number.isFinite(horasMax) && horasMax > 0 && agora - Date.parse(c.quando) > horasMax * 3600000) {
-      avisos.push(`Dados de ${fonte} até ${quando(c.quando, fusoHoras)} (${ha(c.quando)}; esperado a cada ${horasMax} h)`);
+      avisos.push(['aviso', 'atrasada', `Dados de ${fonte} até ${quando(c.quando, fusoHoras)} (${ha(c.quando)}; esperado a cada ${horasMax} h)`]);
     }
   }
-  el.innerHTML = avisos.map((t) => `<div class="aviso-dados" role="status"><span aria-hidden="true">⚠</span>${esc(t)}</div>`).join('');
+  // A pílula repete em uma palavra o estado que o texto já diz (falhou, atrasada, sem coleta).
+  el.innerHTML = avisos.map(([st, estado, t]) => `<div class="aviso-dados" role="status">${pill(st, estado)}<span>${esc(t)}</span></div>`).join('');
   el.hidden = avisos.length === 0;
   return avisos.length > 0;
 }

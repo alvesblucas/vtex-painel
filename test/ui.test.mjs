@@ -19,10 +19,40 @@ test('formatação de dinheiro em centavos', () => {
 
 test('esc e variação', () => {
   assert.equal(esc('<img src=x onerror="a">&\''), '&lt;img src=x onerror=&quot;a&quot;&gt;&amp;&#39;');
-  assert.match(delta(110, 100), /class="delta up num">▲ 10%/);
-  assert.match(delta(90, 100), /down.*▼ 10%/);
+  assert.match(delta(110, 100), /class="pill up">▲ 10%/);
+  assert.match(delta(90, 100), /class="pill dn">▼ 10%/);
   assert.match(delta(90, 0), /—/);
-  assert.match(deltaPct(5, { subirEhBom: false }), /class="delta down num">▲ 5%/);
+  assert.doesNotMatch(delta(90, 0), /pill/, 'sem base: nada de pílula');
+  // subir é ruim (cancelados): alta vira atenção (wn), queda vira boa (up)
+  assert.match(deltaPct(5, { subirEhBom: false }), /class="pill wn">▲ 5%/);
+  assert.match(deltaPct(-5, { subirEhBom: false }), /class="pill up">▼ 5%/);
+  assert.match(deltaPct(0), /class="pill fl">= 0%/);
+});
+
+test('cartaoHtml: delta vira pílula, delta nulo não gera pílula, ícone opcional', async () => {
+  const { cartaoHtml } = await import('../public/js/ui.js');
+  assert.match(cartaoHtml({ rotulo: 'Pedidos', valor: '7', delta: deltaPct(12) }), /class="pill up"/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7', delta: null }), /pill/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7', delta: deltaPct(null) }), /pill/);
+  const comIcone = cartaoHtml({ rotulo: 'Pedidos', valor: '7', icone: 'pedidos' });
+  assert.match(comIcone, /<span class="cartao-icone"><svg/);
+  assert.match(comIcone, /aria-hidden="true"/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7' }), /<svg|cartao-icone/);
+  assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7', icone: 'inexistente' }), /cartao-icone/);
+});
+
+test('avisoDados: cada aviso traz a pílula do estado', async () => {
+  const { avisoDados } = await import('../public/js/ui.js');
+  const el = { innerHTML: '', hidden: true };
+  const agora = Date.parse('2026-11-14T12:00:00Z');
+  avisoDados(el, [
+    { fonte: 'pedidos', ok: false, quando: '2026-11-14T03:00:00Z' },
+    { fonte: 'clientes', ok: true, quando: '2026-11-10T03:00:00Z' },
+  ], { clientes: { horasMax: 26 }, estoque: { horasMax: 26 } }, { agora });
+  assert.match(el.innerHTML, /<span class="pill st-erro"><i aria-hidden="true"><\/i>falhou<\/span>/);
+  assert.match(el.innerHTML, /<span class="pill st-aviso"><i aria-hidden="true"><\/i>atrasada<\/span>/);
+  assert.match(el.innerHTML, /<span class="pill st-aviso"><i aria-hidden="true"><\/i>sem coleta<\/span>/);
+  assert.equal(el.hidden, false);
 });
 
 test('CSV: ;, BOM, CRLF, centavos com vírgula, aspas escapadas', () => {
@@ -115,10 +145,10 @@ test('cartao sem número e com valor nulo mostra — sem contar (Review Focus 4)
 
 test('cartaoHtml segue a mockup: rótulo, valor e a variação abaixo do valor', async () => {
   const { cartaoHtml } = await import('../public/js/ui.js');
-  const html = cartaoHtml({ rotulo: 'Pedidos', valor: '7', sub: 'vs anterior', delta: '<span class="delta up num">▲ 2%</span>' });
+  const html = cartaoHtml({ rotulo: 'Pedidos', valor: '7', sub: 'vs anterior', delta: '<span class="pill up">▲ 2%</span>' });
   const iValor = html.indexOf('cartao-valor');
   assert.ok(html.indexOf('cartao-rotulo') < iValor);
-  assert.ok(html.indexOf('class="delta') > iValor, 'variação abaixo do valor');
+  assert.ok(html.indexOf('class="pill') > iValor, 'variação abaixo do valor');
   assert.match(html, /<div class="cartao-pe">.*<span class="cartao-sub">vs anterior<\/span><\/div>/s);
   assert.doesNotMatch(cartaoHtml({ rotulo: 'Pedidos', valor: '7' }), /cartao-pe/);
 });

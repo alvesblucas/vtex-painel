@@ -130,10 +130,10 @@ function pintarResumo(el, d, vv, f) {
   }
   const antes = (txt) => (c ? `${rotuloCmp(f)}: ${txt}` : '');
   const cartoes = [
-    vv && { rotulo: 'Faturamento', valor: brlK(a.valor), sub: c ? antes(brlK(c.valor)) : brl(a.valor), delta: c ? delta(a.valor, c.valor) : '', chave: 'faturamento', numero: a.valor, formatar: brlK },
-    { rotulo: 'Pedidos', valor: int(a.pedidos), sub: antes(int(c?.pedidos)), delta: c ? delta(a.pedidos, c.pedidos) : '', chave: 'pedidos', numero: a.pedidos, formatar: int },
-    vv && { rotulo: 'Ticket médio', valor: brl(a.ticket), sub: antes(brl(c?.ticket)), delta: c ? delta(a.ticket, c.ticket) : '', chave: 'ticket', numero: a.ticket, formatar: brl },
-    { rotulo: 'Cancelados', valor: int(a.cancelados), sub: antes(int(c?.cancelados)), delta: c ? delta(a.cancelados, c.cancelados, { subirEhBom: false }) : '', contagem: 'cancelados', numero: a.cancelados, formatar: int },
+    vv && { rotulo: 'Faturamento', icone: 'dinheiro', valor: brlK(a.valor), sub: c ? antes(brlK(c.valor)) : brl(a.valor), delta: c ? delta(a.valor, c.valor) : '', chave: 'faturamento', numero: a.valor, formatar: brlK },
+    { rotulo: 'Pedidos', icone: 'sacola', valor: int(a.pedidos), sub: antes(int(c?.pedidos)), delta: c ? delta(a.pedidos, c.pedidos) : '', chave: 'pedidos', numero: a.pedidos, formatar: int },
+    vv && { rotulo: 'Ticket médio', icone: 'ticket', valor: brl(a.ticket), sub: antes(brl(c?.ticket)), delta: c ? delta(a.ticket, c.ticket) : '', chave: 'ticket', numero: a.ticket, formatar: brl },
+    { rotulo: 'Cancelados', icone: 'cancelado', valor: int(a.cancelados), sub: antes(int(c?.cancelados)), delta: c ? delta(a.cancelados, c.cancelados, { subirEhBom: false }) : '', contagem: 'cancelados', numero: a.cancelados, formatar: int },
   ].filter(Boolean);
   pintarFileira(el, cartoes, vv ? 's3' : 's6');
 }

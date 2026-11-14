@@ -1,4 +1,4 @@
-// Ícones de linha (24×24, traço 1,5 px, cor do texto) e grupos das abas na lateral. Sem biblioteca.
+// Ícones de linha (24×24, traço 1,5 px, cor do texto) da lateral e dos KPIs, e grupos das abas. Sem biblioteca.
 
 const TRACOS = {
   visao: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -11,6 +11,12 @@ const TRACOS = {
   saude: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
   usuarios: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
   legado: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  // ícones dos KPIs
+  dinheiro: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/>',
+  sacola: '<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/>',
+  ticket: '<path d="M3 6h18v4a2 2 0 0 0 0 4v4H3v-4a2 2 0 0 0 0-4z"/><path d="M14 7v2M14 11v2M14 15v2"/>',
+  cancelado: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+  percentual: '<path d="M19 5L5 19"/><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/>',
 };
 
 // SVG inline decorativo: o texto ao lado é quem dá o nome. Nome desconhecido = ''.
