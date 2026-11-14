@@ -534,9 +534,11 @@ async function carregarPerfis(st) {
 
 function pintarPerfis(st, painel) {
   painel.dataset.pintado = '1';
+  const somenteLeitura = !st.ctx.eu.superAdmin; // R18: perfis só o super admin edita
+  const trava = somenteLeitura ? ` disabled title="${esc(SO_SUPER)}"` : '';
   painel.innerHTML = `<div class="card-head"><h2>Perfis</h2>
       <div class="ferramentas"><span class="sub">marque o que cada perfil vê; ajustes por pessoa ficam em Pessoas</span>
-        <button type="button" class="btn primario" data-criar-perfil>Criar perfil</button></div></div>
+        <button type="button" class="btn primario" data-criar-perfil${trava}>Criar perfil</button></div></div>
     <div class="matriz-erro" role="alert"></div>
     <div class="tabela-wrap"><table class="matriz">
       <thead><tr><th scope="col"><span class="th-fixo">Perfil</span></th>
@@ -547,10 +549,10 @@ function pintarPerfis(st, painel) {
       <tbody>${st.perfis.map((p) => `<tr data-perfil="${esc(p.id)}">
         <th scope="row" class="matriz-nome">${esc(p.nome)} <span class="muted num">${esc(p.id)}</span></th>
         ${ABAS.map((a) => `<td class="c"><input type="checkbox" data-aba="${a}" ${p.abas.includes(a) ? 'checked' : ''}
-          aria-label="${esc(p.nome)}: ${esc(rotuloAba(a))}"></td>`).join('')}
-        <td class="c"><input type="checkbox" data-rs ${p.ver_valores ? 'checked' : ''} aria-label="${esc(p.nome)}: ver valores em R$"></td>
+          aria-label="${esc(p.nome)}: ${esc(rotuloAba(a))}"${trava}></td>`).join('')}
+        <td class="c"><input type="checkbox" data-rs ${p.ver_valores ? 'checked' : ''} aria-label="${esc(p.nome)}: ver valores em R$"${trava}></td>
         <td class="r num">${esc(p.usuarios ?? 0)}</td>
-        <td><button type="button" class="btn" data-salvar-perfil disabled>Salvar</button></td>
+        <td><button type="button" class="btn" data-salvar-perfil disabled${somenteLeitura ? ` title="${esc(SO_SUPER)}"` : ''}>Salvar</button></td>
       </tr>`).join('')}</tbody></table></div>`;
   const erro = painel.querySelector('.matriz-erro');
   painel.querySelectorAll('tr[data-perfil]').forEach((tr) => {
@@ -591,7 +593,7 @@ function pintarPerfis(st, painel) {
       }
     });
   });
-  painel.querySelector('[data-criar-perfil]').addEventListener('click', (ev) => criarPerfil(st, ev.currentTarget));
+  if (!somenteLeitura) painel.querySelector('[data-criar-perfil]').addEventListener('click', (ev) => criarPerfil(st, ev.currentTarget));
 }
 
 const slug = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-')

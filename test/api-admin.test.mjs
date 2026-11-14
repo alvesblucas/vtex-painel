@@ -345,7 +345,7 @@ test('GET perfis com contagem de usuários', async () => {
 test('POST perfil: cria, audita, duplicado 409, validação 400', async () => {
   const db = await banco();
   const corpo = { id: 'financeiro', nome: 'Financeiro', abas: ['visao', 'vendas'], ver_valores: true };
-  const r = await pedir(db, 'POST', '/api/admin/perfis', perfis, { corpo });
+  const r = await pedir(db, 'POST', '/api/admin/perfis', perfis, { email: SUPER, corpo });
   assert.equal(r.status, 201);
   const p = await db.prepare('SELECT * FROM perfis WHERE id = ?').bind('financeiro').first();
   assert.deepEqual({ ...p, abas: JSON.parse(p.abas) }, { id: 'financeiro', nome: 'Financeiro', abas: ['visao', 'vendas'], ver_valores: 1 });
@@ -353,19 +353,41 @@ test('POST perfil: cria, audita, duplicado 409, validação 400', async () => {
   assert.equal(a.acao, 'perfil.criar');
   assert.equal(a.alvo, 'financeiro');
   assert.equal(a.antes, null);
-  assert.equal((await pedir(db, 'POST', '/api/admin/perfis', perfis, { corpo })).status, 409);
+  assert.equal((await pedir(db, 'POST', '/api/admin/perfis', perfis, { email: SUPER, corpo })).status, 409);
   const ruins = [
     { ...corpo, id: 'Fin' }, { ...corpo, id: '1fin' }, { ...corpo, id: 'f' }, { ...corpo, id: 'f'.repeat(32) },
     { ...corpo, abas: ['visao', 'visao'] }, { ...corpo, abas: ['cpf'] }, { ...corpo, abas: 'visao' },
     { ...corpo, ver_valores: 1 }, { ...corpo, nome: '' }, { id: 'outro', nome: 'Outro', abas: [] }, { ...corpo, id: 'novo2', x: 1 },
   ];
-  for (const c of ruins) assert.equal((await pedir(db, 'POST', '/api/admin/perfis', perfis, { corpo: c })).status, 400, JSON.stringify(c));
+  for (const c of ruins) assert.equal((await pedir(db, 'POST', '/api/admin/perfis', perfis, { email: SUPER, corpo: c })).status, 400, JSON.stringify(c));
   assert.equal((await linhasAuditoria(db)).length, 1);
+});
+
+test('R18: admin comum não cria nem edita perfil → 403 somente-super-admin, nada gravado', async () => {
+  const db = await banco();
+  const antes = await db.prepare('SELECT * FROM perfis ORDER BY id').all();
+  const post = await pedir(db, 'POST', '/api/admin/perfis', perfis, {
+    corpo: { id: 'financeiro', nome: 'Financeiro', abas: ['visao'], ver_valores: true },
+  });
+  assert.equal(post.status, 403);
+  assert.equal(post.corpo.erro, 'somente-super-admin');
+  // o perfil do próprio admin (gestao) também não pode ser alterado por ele
+  for (const id of ['gestao', 'compras']) {
+    const patch = await pedir(db, 'PATCH', `/api/admin/perfis/${id}`, perfil, {
+      params: { id }, corpo: { abas: ['visao', 'vendas'], ver_valores: true },
+    });
+    assert.equal(patch.status, 403, id);
+    assert.equal(patch.corpo.erro, 'somente-super-admin');
+  }
+  assert.equal(await db.prepare('SELECT id FROM perfis WHERE id = ?').bind('financeiro').first(), null);
+  assert.deepEqual((await db.prepare('SELECT * FROM perfis ORDER BY id').all()).results, antes.results);
+  assert.equal((await linhasAuditoria(db)).length, 0);
+  assert.equal((await pedir(db, 'GET', '/api/admin/perfis', perfis)).status, 200);
 });
 
 test('PATCH perfil inexistente → 404, nada gravado', async () => {
   const db = await banco();
-  const r = await pedir(db, 'PATCH', '/api/admin/perfis/x', perfil, { params: { id: 'nao-existe' }, corpo: { nome: 'X' } });
+  const r = await pedir(db, 'PATCH', '/api/admin/perfis/x', perfil, { email: SUPER, params: { id: 'nao-existe' }, corpo: { nome: 'X' } });
   assert.equal(r.status, 404);
   assert.equal(r.corpo.erro, 'nao-encontrado');
   assert.equal((await linhasAuditoria(db)).length, 0);
@@ -376,7 +398,7 @@ test('PATCH perfil: reflete na permissão do usuário na próxima requisição (
   const env = { SUPER_ADMIN: SUPER };
   assert.ok(!(await carregarEu(db, 'ana@exemplo.com', env)).abas.includes('vendas')); // entra no cache
   const r = await pedir(db, 'PATCH', '/api/admin/perfis/compras', perfil, {
-    params: { id: 'compras' }, corpo: { abas: ['visao', 'vendas'], ver_valores: true },
+    email: SUPER, params: { id: 'compras' }, corpo: { abas: ['visao', 'vendas'], ver_valores: true },
   });
   assert.equal(r.status, 200);
   assert.deepEqual(r.corpo.abas, ['visao', 'vendas']);
@@ -388,7 +410,7 @@ test('PATCH perfil: reflete na permissão do usuário na próxima requisição (
   assert.equal(JSON.parse(a.antes).ver_valores, 0);
   assert.equal(JSON.parse(a.depois).ver_valores, 1);
   for (const corpo of [{ abas: ['x'] }, { ver_valores: 'sim' }, {}, { id: 'outro' }]) {
-    assert.equal((await pedir(db, 'PATCH', '/x', perfil, { params: { id: 'compras' }, corpo })).status, 400);
+    assert.equal((await pedir(db, 'PATCH', '/x', perfil, { email: SUPER, params: { id: 'compras' }, corpo })).status, 400);
   }
 });
 

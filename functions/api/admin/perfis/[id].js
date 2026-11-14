@@ -4,13 +4,15 @@ import {
   paraAuditoria, perfilParaApi, somenteChaves,
 } from '../../../_lib/admin.js';
 import { exigirAdmin, limparCacheUsuarios } from '../../../_lib/permissoes.js';
-import { json } from '../../../_lib/resposta.js';
+import { ErroHttp, json } from '../../../_lib/resposta.js';
 
 const CAMPOS = ['id', 'nome', 'abas', 'ver_valores'];
 const EDITAVEIS = ['nome', 'abas', 'ver_valores'];
 
 export async function onRequestPatch(context) {
   exigirAdmin(context);
+  // R18: editar perfis é só do super admin.
+  if (!context.data.eu.superAdmin) throw new ErroHttp(403, 'somente-super-admin', 'Só o administrador principal pode alterar.');
   const db = context.env.DB;
   const id = typeof context.params?.id === 'string' ? context.params.id : '';
   const corpo = await lerCorpo(context.request);
