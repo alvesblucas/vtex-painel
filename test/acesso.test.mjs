@@ -32,22 +32,22 @@ const PAR = await gerarPar('k1');
 const OUTRO = await gerarPar('k1');
 const buscarChaves = async () => ({ keys: [PAR.publica] });
 const opcoes = { equipe: EQUIPE, aud: AUD, agora: AGORA, buscarChaves };
-const base = { email: ' Gabriela@Exemplo.COM ', aud: [AUD], iss: ISS, exp: SEG + 600, iat: SEG - 10, nbf: SEG - 10 };
+const base = { email: ' Maria@Exemplo.COM ', aud: [AUD], iss: ISS, exp: SEG + 600, iat: SEG - 10, nbf: SEG - 10 };
 
 async function rejeita(promessa) {
   await assert.rejects(promessa, (e) => e instanceof ErroHttp && e.status === 401 && e.codigo === 'sem-login');
 }
 
 test('normalizarEmail', () => {
-  assert.equal(normalizarEmail(' Gabriela@Exemplo.COM '), 'gabriela@exemplo.com');
+  assert.equal(normalizarEmail(' Maria@Exemplo.COM '), 'maria@exemplo.com');
   assert.equal(normalizarEmail(null), '');
 });
 
 test('JWT válido é aceito e o e-mail sai normalizado', async () => {
   const token = await assinar(PAR.privada, base);
-  assert.deepEqual(await verificarJwt(token, opcoes), { email: 'gabriela@exemplo.com' });
+  assert.deepEqual(await verificarJwt(token, opcoes), { email: 'maria@exemplo.com' });
   const audTexto = await assinar(PAR.privada, { ...base, aud: AUD });
-  assert.equal((await verificarJwt(audTexto, opcoes)).email, 'gabriela@exemplo.com');
+  assert.equal((await verificarJwt(audTexto, opcoes)).email, 'maria@exemplo.com');
 });
 
 test('JWT com aud errado, expirado, nbf futuro, iss errado ou sem e-mail é rejeitado', async () => {
@@ -82,7 +82,7 @@ test('emailDaRequisicao: usa o JWT do header e falha fechado sem configuração'
   const token = await assinar(PAR.privada, base);
   const env = { ACCESS_TEAM: EQUIPE, ACCESS_AUD: AUD };
   const com = req('https://meu-painel.pages.dev/api/eu', { 'Cf-Access-Jwt-Assertion': token });
-  assert.equal(await emailDaRequisicao(com, env, { agora: AGORA, buscarChaves }), 'gabriela@exemplo.com');
+  assert.equal(await emailDaRequisicao(com, env, { agora: AGORA, buscarChaves }), 'maria@exemplo.com');
   await rejeita(emailDaRequisicao(req('https://meu-painel.pages.dev/api/eu'), env, { agora: AGORA, buscarChaves }));
   await rejeita(emailDaRequisicao(com, {}, { agora: AGORA, buscarChaves }));
 });
