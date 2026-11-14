@@ -433,6 +433,7 @@ tbody tr:hover td { background: rgba(255, 255, 255, .025); }
   margin-top: -10px; opacity: 0; transition: opacity .1s; z-index: 5;
 }
 .dica.on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .dica { transition: none; } }
 .dica.a-esquerda { transform: translate(-100%, -100%); }
 .dica.a-direita { transform: translate(0, -100%); }
 .dica-titulo { color: var(--muted); margin-bottom: 2px; }

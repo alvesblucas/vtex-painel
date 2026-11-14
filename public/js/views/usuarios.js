@@ -180,6 +180,7 @@ function pintarPessoas(st, painel) {
         td.textContent = u.email;
       } },
       { chave: 'perfilTxt', titulo: 'Perfil', celula: (u, td) => {
+        if (u.perfilTxt === '—') { td.textContent = '—'; return; }
         const s = document.createElement('span');
         s.className = 'pill pf';
         s.textContent = u.perfilTxt;
