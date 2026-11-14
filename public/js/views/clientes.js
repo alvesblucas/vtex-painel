@@ -1,7 +1,7 @@
 // Clientes (só pedidos do site): cartões → novo × recorrente por origem (clique filtra) → % de novos por semana.
 import { linha } from '../graficos.js';
-import { brlK, cartao, dma, esc, int, num1 } from '../ui.js';
-import { bloco, cartoesEsqueleto, estrutura, rotuloCmp, semDados } from './comum.js';
+import { brlK, dma, esc, int, num1 } from '../ui.js';
+import { bloco, cartoesEsqueleto, estrutura, pintarFileira, rotuloCmp, semDados } from './comum.js';
 
 const APLICAVEIS = ['periodo', 'cmp', 'origem', 'pagamento', 'uf', 'cidade', 'entrega'];
 const pctTxt = (n) => `${num1(n)}%`;
@@ -29,7 +29,7 @@ export async function render(el, ctx) {
         <div class="card-head"><h2 id="t-semana">Clientes novos por semana</h2><span class="sub">% dos pedidos do site</span></div>
         <div data-b="semana"></div>
       </section>
-    </div>`);
+    </div>`, 'dados');
   const b = (k) => raiz.querySelector(`[data-b="${k}"]`);
   const f = ctx.filtros;
   // Uma consulta alimenta os três blocos; cada um tem seu estado. Se falhar, "Tentar de novo" refaz a consulta.
@@ -58,13 +58,12 @@ function pintarCartoes(el, d, ctx) {
   const vv = ctx.eu.verValores;
   const sub = (t) => (vv && d[t].valor != null ? brlK(d[t].valor) : `${num1((d[t].pedidos / total) * 100)}% dos pedidos`);
   const lista = [
-    { rotulo: 'Clientes novos', valor: pctTxt(d.pctNovos), sub: d.cmp ? `${rotuloCmp(ctx.filtros)}: ${pctTxt(d.cmp.pctNovos)}` : 'novos ÷ (novos + recorrentes)', delta: d.cmp ? deltaPp(d.pctNovos, d.cmp.pctNovos) : '' },
-    { rotulo: 'Pedidos de novos', valor: int(d.novo.pedidos), sub: sub('novo') },
-    { rotulo: 'Pedidos de recorrentes', valor: int(d.recorrente.pedidos), sub: sub('recorrente') },
-    { rotulo: 'Indefinidos', valor: int(d.indefinido.pedidos), sub: 'sem histórico do cliente' },
+    { rotulo: 'Clientes novos', valor: pctTxt(d.pctNovos), contagem: 'pct-novos', numero: d.pctNovos, formatar: pctTxt, sub: d.cmp ? `${rotuloCmp(ctx.filtros)}: ${pctTxt(d.cmp.pctNovos)}` : 'novos ÷ (novos + recorrentes)', delta: d.cmp ? deltaPp(d.pctNovos, d.cmp.pctNovos) : '' },
+    { rotulo: 'Pedidos de novos', valor: int(d.novo.pedidos), contagem: 'pedidos-novos', numero: d.novo.pedidos, formatar: int, sub: sub('novo') },
+    { rotulo: 'Pedidos de recorrentes', valor: int(d.recorrente.pedidos), contagem: 'pedidos-recorrentes', numero: d.recorrente.pedidos, formatar: int, sub: sub('recorrente') },
+    { rotulo: 'Indefinidos', valor: int(d.indefinido.pedidos), contagem: 'indefinidos', numero: d.indefinido.pedidos, formatar: int, sub: 'sem histórico do cliente' },
   ];
-  el.innerHTML = `<div class="grade cartoes">${lista.map(() => '<div class="card s3"></div>').join('')}</div>`;
-  el.querySelectorAll('.card').forEach((card, i) => cartao(card, lista[i]));
+  pintarFileira(el, lista, 's3');
 }
 
 // Barra empilhada por origem: comprimento = pedidos da origem; segmentos novo | recorrente.

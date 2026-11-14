@@ -1,6 +1,6 @@
 {
   "name": "vtex-painel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Painel de vendas para lojas VTEX em Cloudflare Pages + D1",
   "type": "module",
   "license": "MIT",

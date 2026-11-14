@@ -1,16 +1,20 @@
 // Formatação e componentes de tela. Dinheiro chega em centavos inteiros.
+import { contar } from './movimento.js';
+import { VERSAO } from './versao.js';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
 
 const reais = (c, casas = 2) => (c / 100).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 export const brl = (c) => (c == null ? '—' : `R$ ${reais(c)}`);
-export const brlK = (c) => {
+// ref (opcional) escolhe a unidade: na contagem é o valor final, para a unidade não trocar no meio.
+export const brlK = (c, ref = c) => {
   if (c == null) return '—';
   const r = Math.abs(c) / 100;
+  const u = Math.abs(Number.isFinite(ref) ? ref : c) / 100;
   const sinal = c < 0 ? '-' : '';
-  if (r >= 1e6) return `${sinal}R$ ${(r / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
-  if (r >= 1e4) return `${sinal}R$ ${(r / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
+  if (u >= 1e6) return `${sinal}R$ ${(r / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
+  if (u >= 1e4) return `${sinal}R$ ${(r / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
   return brl(c);
 };
 // Eixo: compacto a partir de R$ 10 mil, sem centavos abaixo disso.
@@ -58,6 +62,10 @@ export const delta = (a, b, opcoes) => (b ? deltaPct((a / b - 1) * 100, opcoes) 
 const STATUS = { ok: 'ok', aviso: 'atenção', erro: 'problema', fora: 'fora do dia' };
 export const pill = (status, texto) => `<span class="pill st-${esc(status)}"><i aria-hidden="true"></i>${esc(texto || STATUS[status] || status)}</span>`;
 
+// Rodapé do produto (crédito do autor), igual em toda instância.
+export const rodapeHtml = () => `<footer class="rodape"><span>vtex-painel · v${esc(VERSAO)}</span>
+  <a href="https://github.com/alvesblucas" target="_blank" rel="noopener">Designed &amp; developed by Lucas Alves</a></footer>`;
+
 // Tira o estado "recarregando" que carregando() põe quando já havia conteúdo.
 export function pronto(el) {
   el.classList.remove('recarregando');
@@ -94,11 +102,31 @@ export function erroCartao(el, mensagem, tentar) {
 }
 
 // Cartão de número: rótulo, valor (texto já formatado), sub e variação (html de delta()/deltaPct()).
-export function cartao(el, { rotulo, valor, sub, delta: variacao }) {
+// Ordem da mockup: rótulo em caixa alta → valor grande → variação e sub numa linha abaixo.
+// O valor não quebra linha; se não couber, a reticência corta a vista e o title guarda o valor inteiro.
+export const cartaoHtml = ({ rotulo, valor, sub, delta: variacao }) => `<div class="cartao-rotulo">${esc(rotulo)}</div>
+    <div class="cartao-valor num"${valor != null && valor !== '—' ? ` title="${esc(valor)}"` : ''}>${esc(valor ?? '—')}</div>
+    ${variacao || sub ? `<div class="cartao-pe">${variacao ?? ''}${sub ? `<span class="cartao-sub">${esc(sub)}</span>` : ''}</div>` : ''}`;
+
+// Último elemento de valor de cada métrica: a contagem nova parte do que está na tela (troca de filtro ou de aba).
+const valorPorChave = new Map();
+
+// Opcionais: chave (nome da métrica, vira view-transition-name "kpi-<chave>" para o morph entre abas),
+// contagem (só a memória da contagem, sem morph; padrão = chave) e numero + formatar (o valor conta
+// até numero). formatar recebe (valor, numero): formatos com unidade (brlK) a fixam pelo valor final.
+// Sem numero finito, mostra valor (ou —) sem contar.
+export function cartao(el, opcoes) {
+  const { chave, contagem = chave, numero, formatar } = opcoes;
   pronto(el);
-  el.innerHTML = `<div class="cartao-rotulo"><span>${esc(rotulo)}</span>${variacao ?? ''}</div>
-    <div class="cartao-valor num">${esc(valor ?? '—')}</div>
-    ${sub ? `<div class="cartao-sub">${esc(sub)}</div>` : ''}`;
+  if (chave) el.style.viewTransitionName = `kpi-${chave}`;
+  el.innerHTML = cartaoHtml(opcoes);
+  if (!Number.isFinite(numero) || typeof formatar !== 'function') return;
+  const valorEl = el.querySelector('.cartao-valor');
+  const anterior = contagem ? valorPorChave.get(contagem) : null;
+  if (contagem) valorPorChave.set(contagem, valorEl);
+  const de = anterior ? anterior._contagem?.atual ?? Number(anterior.dataset.valor) : undefined;
+  if (anterior) anterior._contagem = null; // o elemento antigo saiu da tela: para de contar
+  contar(valorEl, numero, (v) => formatar(v, numero), Number.isFinite(de) ? { de } : {});
 }
 
 // Aviso amarelo quando a fonte está atrasada em relação à agenda ({fonte: {horasMax}}) ou a última coleta falhou.

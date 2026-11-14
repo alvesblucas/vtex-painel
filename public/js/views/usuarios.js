@@ -34,7 +34,7 @@ export async function render(el, ctx) {
         aria-controls="painel-${k}">${t}</button>`).join('')}
     </div>
     <p class="aviso-salvo" role="status" aria-live="polite"></p>
-    ${INTERNAS.map(([k]) => `<section class="card" role="tabpanel" id="painel-${k}" aria-labelledby="aba-${k}" hidden></section>`).join('')}`);
+    ${INTERNAS.map(([k]) => `<section class="card" role="tabpanel" id="painel-${k}" aria-labelledby="aba-${k}" hidden></section>`).join('')}`, 'admin');
   const st = { ctx, raiz, usuarios: [], perfis: [], seq: { pessoas: 0, perfis: 0, historico: 0 } };
   const abas = [...raiz.querySelectorAll('[role=tab]')];
   const mostrar = (k, focar = false) => {

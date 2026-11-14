@@ -1,5 +1,6 @@
 // Gráficos sem dependências: linha (um eixo, comparação tracejada, cruz + dica) e barras horizontais (top 10).
 // Cores: --serie (período) e --serie-ref (comparação), validadas para o fundo escuro (validate_palette.js).
+import { crescerBarras, revelarLinha } from './movimento.js';
 import { esc, int, pronto } from './ui.js';
 
 // Escala "limpa": 0, passo, 2·passo... com passo 1/2/2,5/5 × 10^n.
@@ -14,6 +15,8 @@ export function escala(max, alvo = 4) {
   return { max: topo, ticks };
 }
 
+let idGrafico = 0;
+
 // Redesenha ao mudar a largura do contêiner.
 function aoRedimensionar(el, desenhar) {
   el._ro?.disconnect();
@@ -22,7 +25,7 @@ function aoRedimensionar(el, desenhar) {
   el._ro = new ResizeObserver(() => {
     if (Math.abs(el.clientWidth - largura) < 8) return;
     largura = el.clientWidth;
-    desenhar();
+    desenhar(); // redesenho por largura: sem animação de entrada
   });
   el._ro.observe(el);
 }
@@ -67,7 +70,9 @@ export function linha(el, pontos, opcoes = {}) {
     el.innerHTML = `<div class="estado vazio">${pontos.length ? 'A linha aparece a partir do 2º dia.' : 'Sem dados no período.'}</div>`;
     return;
   }
-  const desenhar = () => {
+  const idArea = `area-${++idGrafico}`;
+  // animar só no 1º desenho de dados novos; redesenhos por largura aparecem prontos.
+  const desenhar = (animar = false) => {
     const W = Math.max(280, el.clientWidth || 800);
     const H = W < 500 ? Math.round(altura * 0.8) : altura;
     const temRef = pontos.some((p) => p.ref != null);
@@ -81,14 +86,19 @@ export function linha(el, pontos, opcoes = {}) {
     const caminho = (k) => pontos.map((p, i) => (p[k] == null ? '' : `${i && pontos[i - 1][k] != null ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[k]).toFixed(1)}`)).join('');
     const passo = Math.max(1, Math.ceil(n / Math.max(3, Math.floor(W / 90))));
     const ultimo = pontos[n - 1];
+    // Área suave sob a linha do período (degradê do branco a transparente), fechada na base do gráfico.
+    const base = y(0).toFixed(1);
+    const area = `M${x(0).toFixed(1)},${base}${pontos.map((p, i) => `L${x(i).toFixed(1)},${y(p.y ?? 0).toFixed(1)}`).join('')}L${x(n - 1).toFixed(1)},${base}Z`;
 
     el.innerHTML = `${temRef ? `<div class="legenda"><span><i class="chave-serie"></i>${esc(rotulo)}</span><span><i class="chave-ref"></i>${esc(rotuloRef)}</span></div>` : ''}
       <div class="grafico"><svg viewBox="0 0 ${W} ${H}" role="img" tabindex="0" aria-label="${esc(titulo)}. Use as setas para percorrer os dias.">
+      <defs><linearGradient id="${idArea}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" class="area-topo"/><stop offset="1" class="area-base"/></linearGradient></defs>
       ${ticks.map((t) => `<line class="grade-linha" x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}"/><text class="eixo" x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end">${esc(fmtY(t))}</text>`).join('')}
       ${pontos.map((p, i) => ((i % passo === 0 && n - 1 - i >= passo) || i === n - 1 ? `<text class="eixo" x="${x(i)}" y="${H - 6}" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}">${esc(p.x)}</text>` : '')).join('')}
+      <path d="${area}" class="area" fill="url(#${idArea})"/>
       ${temRef ? `<path d="${caminho('ref')}" class="traco-ref"/>` : ''}
       <path d="${caminho('y')}" class="traco-serie"/>
-      ${(W - m.l - m.r) / n >= 16 ? pontos.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.y)}" r="4" class="ponto"/>`).join('') : `<circle cx="${x(n - 1)}" cy="${y(ultimo.y)}" r="4" class="ponto"/>`}
+      ${(W - m.l - m.r) / n >= 16 ? pontos.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.y)}" r="3" class="ponto"/>`).join('') : `<circle cx="${x(n - 1)}" cy="${y(ultimo.y)}" r="3" class="ponto"/>`}
       <line class="cruz" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>
       <circle class="foco" r="5" visibility="hidden"/>
       <circle class="foco-ref" r="4" visibility="hidden"/>
@@ -96,6 +106,7 @@ export function linha(el, pontos, opcoes = {}) {
     </svg><div class="dica" role="status"></div></div>`;
 
     const svg = el.querySelector('svg');
+    if (animar) revelarLinha(svg);
     const tip = el.querySelector('.dica');
     const cruz = svg.querySelector('.cruz');
     const foco = svg.querySelector('.foco');
@@ -150,8 +161,8 @@ export function linha(el, pontos, opcoes = {}) {
       mostrar(Math.max(0, Math.min(n - 1, (atual < 0 ? n - 1 : atual) + mapa[ev.key])));
     });
   };
-  desenhar();
-  aoRedimensionar(el, desenhar);
+  desenhar(true);
+  aoRedimensionar(el, () => desenhar());
 }
 
 /**
@@ -212,4 +223,5 @@ export function barras(el, itens, opcoes = {}) {
     linhaEl.addEventListener('blur', esconder);
     caixa.append(linhaEl);
   });
+  crescerBarras(caixa);
 }

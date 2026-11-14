@@ -1,0 +1,107 @@
+<!doctype html><meta charset="utf-8"><body style="background:#111;color:#ddd;font-family:system-ui;padding:24px">
+<!-- Mockup de referência (opção A escolhida). Abrir num navegador. -->
+<h2>Referência visual: Escuro preciso</h2>
+<p class="subtitle">A linguagem da Porsche: tipografia grande e precisa, quase sem cor, linhas finas, muito respiro e movimentos suaves e "pesados" (nada de brilho). Recarregue a página (F5) para ver os números contando e o gráfico se desenhando. Passe o mouse no menu e nos cartões.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  .px{--ease:cubic-bezier(.25,.1,.25,1);font-family:"Inter Tight","Segoe UI",system-ui,sans-serif;border-radius:4px;overflow:hidden;display:grid;grid-template-columns:168px 1fr;min-height:470px;position:relative;-webkit-font-smoothing:antialiased}
+  .px .side{padding:26px 0;display:flex;flex-direction:column}
+  .px .marca{padding:0 22px 30px;font-size:13px;font-weight:600;letter-spacing:.32em;text-transform:uppercase}
+  .px .item{position:relative;padding:11px 22px;font-size:14px;font-weight:400;cursor:pointer;transition:color .4s var(--ease)}
+  .px .item::after{content:"";position:absolute;left:22px;right:22px;bottom:6px;height:1px;transform:scaleX(0);transform-origin:left;transition:transform .6s var(--ease)}
+  .px .item:hover::after,.px .item.on::after{transform:scaleX(1)}
+  .px .grupo{padding:22px 22px 8px;font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+  .px .main{padding:30px 36px 64px}
+  .px .topo{display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
+  .px .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px}
+  .px h4{margin:0;font-size:40px;line-height:1;font-weight:400;letter-spacing:-.03em}
+  .px .user{font-size:12.5px;text-align:right;line-height:1.6}
+  .px .filtros{display:flex;gap:0;margin:26px 0 30px}
+  .px .f{padding:10px 18px 10px 0;margin-right:22px;font-size:13px;position:relative;cursor:pointer}
+  .px .f b{font-weight:500;margin-left:6px}
+  .px .f::after{content:"";position:absolute;left:0;right:0;bottom:2px;height:1px;opacity:.35}
+  .px .kpis{display:grid;grid-template-columns:repeat(4,1fr)}
+  .px .k{padding:4px 22px 18px;position:relative;transition:transform .7s var(--ease)}
+  .px .k:first-child{padding-left:0}
+  .px .k:not(:first-child){border-left:1px solid}
+  .px .k small{font-size:12px;letter-spacing:.06em;text-transform:uppercase;display:block}
+  .px .k strong{display:block;font-size:34px;font-weight:300;letter-spacing:-.035em;margin:12px 0 8px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .px .k em{font-style:normal;font-size:12.5px}
+  .px .k:hover{transform:translateY(-4px)}
+  .px .graf{margin-top:30px;padding-top:22px;border-top:1px solid}
+  .px .graf .cab{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+  .px .graf svg{width:100%;height:120px;display:block;margin-top:14px;overflow:visible}
+  .px .l1{stroke-dasharray:900;stroke-dashoffset:900;animation:pxd 2.2s var(--ease) .3s forwards}
+  .px .area{opacity:0;animation:pxa 1.2s var(--ease) 1.4s forwards}
+  @keyframes pxd{to{stroke-dashoffset:0}}
+  @keyframes pxa{to{opacity:1}}
+  .px .rev{opacity:0;transform:translateY(14px);animation:pxr .9s var(--ease) forwards}
+  @keyframes pxr{to{opacity:1;transform:none}}
+  .px .rod{position:absolute;left:168px;right:0;bottom:0;padding:16px 36px;font-size:11.5px;letter-spacing:.04em;display:flex;justify-content:space-between;border-top:1px solid}
+
+  /* escuro */
+  .pe{background:#0e0e12;color:#fbfcff}
+  .pe .side{background:#0e0e12;border-right:1px solid #2a2b2f}
+  .pe .item{color:#88898c}.pe .item:hover,.pe .item.on{color:#fbfcff}
+  .pe .item::after{background:#fbfcff}
+  .pe .grupo,.pe .eyebrow,.pe .k small,.pe .graf .cab,.pe .user span{color:#88898c}
+  .pe .f{color:#88898c}.pe .f b{color:#fbfcff}.pe .f::after{background:#fbfcff}
+  .pe .k:not(:first-child),.pe .graf,.pe .rod{border-color:#2a2b2f}
+  .pe .up{color:#fbfcff}.pe .down{color:#fc4040}
+  .pe .rod{color:#6b6d70}
+
+  /* claro */
+  .pc{background:#fff;color:#010205}
+  .pc .side{background:#f2f2f2}
+  .pc .item{color:#6b6d70}.pc .item:hover,.pc .item.on{color:#010205}
+  .pc .item::after{background:#010205}
+  .pc .grupo,.pc .eyebrow,.pc .k small,.pc .graf .cab,.pc .user span{color:#6b6d70}
+  .pc .f{color:#6b6d70}.pc .f b{color:#010205}.pc .f::after{background:#010205}
+  .pc .k:not(:first-child),.pc .graf,.pc .rod{border-color:#e3e4e5}
+  .pc .up{color:#010205}.pc .down{color:#d5001c}
+  .pc .rod{color:#949598}
+</style>
+
+<div class="cards" style="grid-template-columns:1fr">
+<div class="card" data-choice="porsche-escuro" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="px pe">
+        <div class="side">
+          <div class="marca">Minha Loja</div>
+          <div class="item on">Visão geral</div><div class="item">Vendas</div><div class="item">Clientes</div><div class="item">Estoque</div>
+          <div class="grupo">Administração</div><div class="item">Usuários</div>
+        </div>
+        <div class="main">
+          <div class="topo rev"><div><div class="eyebrow">Painel</div><h4>Visão geral</h4></div><div class="user">admin@exemplo.com<br><span>Super admin</span></div></div>
+          <div class="filtros rev" style="animation-delay:.12s"><div class="f">Período<b>Últimos 30 dias</b></div><div class="f">Comparar<b>Período anterior</b></div><div class="f">Origem<b>Todas</b></div><div class="f">Marca<b>Todas</b></div></div>
+          <div class="kpis rev" style="animation-delay:.24s">
+            <div class="k"><small>Faturamento</small><strong data-n="373.7" data-f="mil">R$ 0</strong><em class="up">+1,8% vs anterior</em></div>
+            <div class="k"><small>Pedidos</small><strong data-n="1258" data-f="int">0</strong><em class="up">+4,7%</em></div>
+            <div class="k"><small>Ticket médio</small><strong data-n="297.03" data-f="rs">R$ 0</strong><em class="down">−2,8%</em></div>
+            <div class="k"><small>Clientes novos</small><strong data-n="37.2" data-f="pct">0%</strong><em class="up">340 pedidos</em></div>
+          </div>
+          <div class="graf rev" style="animation-delay:.36s"><div class="cab"><span>Faturamento por dia</span><span>— Período&nbsp;&nbsp;&nbsp;┄ Anterior</span></div>
+            <svg viewBox="0 0 600 120" preserveAspectRatio="none"><defs><linearGradient id="pe-g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#fbfcff" stop-opacity=".12"/><stop offset="1" stop-color="#fbfcff" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0,82 C60,70 90,92 150,74 S240,58 300,66 S390,44 450,52 S540,30 600,38" fill="none" stroke="#535457" stroke-width="1" stroke-dasharray="3 5"/>
+              <path class="area" d="M0,78 C60,52 90,84 150,62 S240,40 300,56 S390,26 450,40 S540,14 600,24 L600,120 L0,120Z" fill="url(#pe-g)"/>
+              <path class="l1" d="M0,78 C60,52 90,84 150,62 S240,40 300,56 S390,26 450,40 S540,14 600,24" fill="none" stroke="#fbfcff" stroke-width="1.5"/></svg></div>
+        </div>
+        <div class="rod"><span>vtex-painel · v0.1.0</span><span>Designed &amp; developed by Lucas Alves</span></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A · Escuro (como as páginas de carro da Porsche)</h3><p>Preto grafite, texto branco e cinza, sem cor de destaque. Só a queda aparece em vermelho. É cinematográfico e premium.</p></div>
+  </div>
+
+  </div>
+
+<script>
+(function(){
+  const ease=t=>1-Math.pow(1-t,4);
+  const fmt=(v,f)=>f==='mil'?'R$ '+v.toFixed(1).replace('.',',')+' mil':f==='int'?Math.round(v).toLocaleString('pt-BR'):f==='rs'?'R$ '+v.toFixed(2).replace('.',','):v.toFixed(1).replace('.',',')+'%';
+  document.querySelectorAll('.px strong[data-n]').forEach(el=>{
+    const alvo=+el.dataset.n,f=el.dataset.f,ini=performance.now()+350,dur=1600;
+    (function passo(t){const p=Math.min(Math.max((t-ini)/dur,0),1);el.textContent=fmt(alvo*ease(p),f);if(p<1)requestAnimationFrame(passo)})(performance.now());
+  });
+})();
+</script>

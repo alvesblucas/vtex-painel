@@ -1,8 +1,9 @@
 // Shell do painel: quem sou eu → menu com as abas permitidas → rota pelo hash → view da aba.
 import { api } from './api.js';
 import { montarBarra } from './barra-filtros.js';
+import { trocarTela } from './movimento.js';
 import { LISTAS, ROTULOS_ABAS, comLista, hojeLocal, lerHash, montarHash } from './estado.js';
-import { avisoDados, carregando, erroCartao, esc, pronto } from './ui.js';
+import { avisoDados, carregando, erroCartao, esc, pronto, rodapeHtml } from './ui.js';
 
 const ABAS = ROTULOS_ABAS;
 const ADMIN = { usuarios: 'Usuários e permissões' };
@@ -38,14 +39,16 @@ function irPara(aba, filtros) {
 function telaSimples(html) {
   raiz.removeAttribute('aria-busy');
   raiz.className = 'app app-simples';
-  raiz.innerHTML = `<main class="cartao-central" id="conteudo" tabindex="-1">${html}</main>`;
+  raiz.innerHTML = `<main class="cartao-central" id="conteudo" tabindex="-1">${html}${rodapeHtml()}</main>`;
 }
 
 async function semAcesso() {
   try {
     const mod = await import('./views/sem-acesso.js');
     telaSimples('');
-    mod.render(raiz.querySelector('main'), { eu, api });
+    const main = raiz.querySelector('main');
+    mod.render(main, { eu, api });
+    main.insertAdjacentHTML('beforeend', rodapeHtml()); // a view reescreve o main inteiro
   } catch {
     telaSimples(`<span class="selo selo-aviso">Sem acesso</span>
       <strong>Você ainda não tem acesso. Peça ao administrador.</strong>
@@ -72,7 +75,7 @@ function montarShell() {
   raiz.className = 'app';
   raiz.innerHTML = `
     <aside class="lateral" id="menu" aria-label="Menu">
-      <div class="marca"><span class="marca-ponto" aria-hidden="true"></span><span>${esc(loja)}</span></div>
+      <div class="marca"><span>${esc(loja)}</span></div>
       <nav><ul class="menu">${itens.filter((a) => a !== 'usuarios').map(link).join('')}</ul>
         ${eu.admin ? `<div class="menu-sep">Administração</div><ul class="menu">${link('usuarios')}</ul>` : ''}
         <div class="menu-sep"></div>
@@ -84,15 +87,19 @@ function montarShell() {
     <div class="principal">
       <header class="topo">
         <button type="button" class="btn-menu" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu">☰</button>
-        <h1 class="topo-titulo" id="titulo"></h1>
+        <div class="topo-cabeca">
+          <span class="sobrelinha" aria-hidden="true">Painel</span>
+          <h1 class="topo-titulo" id="titulo"></h1>
+        </div>
         <div class="usuario">
           <span class="usuario-nome">${esc(eu.nome || eu.email)}</span>
-          <span class="pill">${esc(eu.superAdmin ? 'super admin' : eu.perfil || '—')}${eu.admin && !eu.superAdmin ? ' · admin' : ''}</span>
+          <span class="usuario-perfil">${esc(eu.superAdmin ? 'super admin' : eu.perfil || '—')}${eu.admin && !eu.superAdmin ? ' · admin' : ''}</span>
         </div>
       </header>
       <div class="barra-filtros" id="filtros" hidden></div>
       <div class="avisos" id="avisos" hidden></div>
       <main class="conteudo" id="conteudo" tabindex="-1"></main>
+      ${rodapeHtml()}
     </div>`;
   el = {
     menu: raiz.querySelector('.lateral'),
@@ -145,10 +152,25 @@ function desenharBarra() {
   });
 }
 
+// Módulos das views já carregados. As abas de dados são pré-carregadas depois do shell para que a troca
+// de aba (síncrona, dentro da View Transition) já pinte o esqueleto delas com os nomes do morph dos KPIs.
+const views = new Map();
+const PRECARREGAR = ['visao', 'vendas', 'clientes'];
+
+function precarregarViews() {
+  for (const aba of PRECARREGAR) {
+    if (!eu.abas.includes(aba) || views.has(aba)) continue;
+    import(`./views/${aba}.js`).then((mod) => views.set(aba, mod), () => {}); // falha: carrega na hora, como antes
+  }
+}
+
 async function carregarView(aba) {
   if (!IMPLEMENTADAS.has(aba)) return import('./views/em-breve.js');
+  if (views.has(aba)) return views.get(aba);
   try {
-    return await import(`./views/${aba}.js`);
+    const mod = await import(`./views/${aba}.js`);
+    views.set(aba, mod);
+    return mod;
   } catch {
     return import('./views/em-breve.js');
   }
@@ -169,6 +191,7 @@ async function rotear() {
   const canonico = montarHash(lido.aba, lido.filtros);
   if (canonico !== window.location.hash) window.history.replaceState(null, '', canonico);
 
+  const primeira = !rota;
   const trocouAba = rota?.aba !== lido.aba;
   rota = lido;
   if (trocouAba) aplicaveisAtuais = null;
@@ -176,14 +199,6 @@ async function rotear() {
   controle?.abort();
   controle = new AbortController();
   const meu = controle;
-
-  el.titulo.textContent = rotuloDe(rota.aba);
-  document.title = `${rotuloDe(rota.aba)} · ${eu.loja?.nome || 'Painel'}`;
-  raiz.querySelectorAll('.menu a[data-aba]').forEach((a) => {
-    if (a.dataset.aba === rota.aba) a.setAttribute('aria-current', 'page');
-    else a.removeAttribute('aria-current');
-  });
-  desenharBarra();
 
   const ctx = {
     eu,
@@ -207,16 +222,49 @@ async function rotear() {
     },
   };
 
-  if (trocouAba) {
+  // Troca de aba: título, menu e #conteudo (já no carregando) mudam numa View Transition.
+  // A callback é síncrona e nunca espera a API: a transição captura a tela nova já montada, em geral
+  // com o esqueleto da view (ou o carregando genérico, se o módulo da aba ainda não chegou).
+  // Se o módulo da aba já está carregado e tem esqueleto(), a tela nova nasce com a estrutura
+  // da view (e os view-transition-name dos KPIs): é isso que faz o morph entre as abas acontecer.
+  let comEsqueleto = false;
+  const pintarTela = () => {
+    if (meu !== controle) return; // uma rota mais nova já pintou
+    el.titulo.textContent = rotuloDe(rota.aba);
+    document.title = `${rotuloDe(rota.aba)} · ${eu.loja?.nome || 'Painel'}`;
+    raiz.querySelectorAll('.menu a[data-aba]').forEach((a) => {
+      if (a.dataset.aba === rota.aba) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    desenharBarra();
+    if (!trocouAba) return;
     el.conteudo.replaceChildren();
+    const esqueleto = views.get(rota.aba)?.esqueleto;
+    if (typeof esqueleto === 'function') {
+      try {
+        esqueleto(el.conteudo, ctx);
+        comEsqueleto = true;
+        return;
+      } catch {
+        el.conteudo.replaceChildren(); // esqueleto falhou: cai no carregando genérico
+      }
+    }
     carregando(el.conteudo);
+  };
+
+  let telaTrocada;
+  if (trocouAba) {
+    // 1ª tela: não há de onde transicionar.
+    telaTrocada = primeira ? pintarTela() : trocarTela(pintarTela);
     window.scrollTo(0, 0);
-  }
+  } else pintarTela();
   try {
-    const mod = await carregarView(rota.aba);
+    // A view só pinta depois que a troca limpou #conteudo (senão o carregando apagaria a view).
+    const [mod] = await Promise.all([carregarView(rota.aba), telaTrocada]);
     if (meu !== controle) return;
     pronto(el.conteudo);
-    if (trocouAba) el.conteudo.replaceChildren();
+    // O carregando genérico sai; o esqueleto da view fica, e render() reaproveita a estrutura.
+    if (trocouAba && !comEsqueleto) el.conteudo.replaceChildren();
     await mod.render(el.conteudo, ctx);
   } catch (e) {
     if (e?.name === 'AbortError' || meu !== controle) return;
@@ -249,6 +297,7 @@ async function iniciar() {
   window.addEventListener('hashchange', rotear);
   carregarOpcoes();
   rotear();
+  precarregarViews();
 }
 
 // O link "pular para o conteúdo" não pode mexer no hash (o hash é a rota).

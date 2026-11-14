@@ -2,8 +2,8 @@
 import { rotuloValor } from '../barra-filtros.js';
 import { LISTAS } from '../estado.js';
 import { barras, linha } from '../graficos.js';
-import { brl, brlEixo, brlK, cartao, CSV_MAX_SERVIDOR, delta, dm, dma, erroCartao, esc, int, semana, tabela } from '../ui.js';
-import { bloco, cartoesEsqueleto, estrutura, rotuloCmp, semDados, temCmp } from './comum.js';
+import { brl, brlEixo, brlK, CSV_MAX_SERVIDOR, delta, dm, dma, erroCartao, esc, int, semana, tabela } from '../ui.js';
+import { bloco, cartoesEsqueleto, estrutura, pintarFileira, rotuloCmp, semDados, temCmp } from './comum.js';
 
 const SEM_CHAVE = '(não informado)';
 const QUEBRAS = [
@@ -20,12 +20,14 @@ const AVISO_ITENS = 'Com filtro de marca/categoria, os valores são só dos iten
 // Preferências da sessão (sobrevivem à troca de filtros).
 const pref = { medida: 'valor', ordem: null, busca: '' };
 
-export async function render(el, ctx) {
-  const vv = Boolean(ctx.eu.verValores);
-  ctx.aplicaveis(['periodo', 'cmp', ...LISTAS]);
-  const { raiz } = estrutura(el, `vendas-${vv ? 1 : 0}`, `
+// KPIs: os três primeiros fazem morph com os da Visão geral (mesmas chaves).
+const chavesResumo = (vv) => (vv ? ['faturamento', 'pedidos', 'ticket'] : ['pedidos']);
+const esqueletoResumo = (vv) => cartoesEsqueleto(vv ? 4 : 2, vv ? 's3' : 's6', chavesResumo(vv));
+
+function montar(el, vv) {
+  return estrutura(el, `vendas-${vv ? 1 : 0}`, `
     <div class="aviso-info aviso-itens" role="status" hidden><span aria-hidden="true">ⓘ</span>${esc(AVISO_ITENS)}</div>
-    <section class="secao" aria-label="Resumo" data-b="resumo">${cartoesEsqueleto(vv ? 4 : 2, vv ? 's3' : 's6')}</section>
+    <section class="secao" aria-label="Resumo" data-b="resumo">${esqueletoResumo(vv)}</section>
     <section class="card secao" aria-labelledby="t-serie">
       <div class="card-head"><h2 id="t-serie">Por dia</h2>
         ${vv ? `<div class="segmentos" role="group" aria-label="Medida do gráfico">
@@ -43,7 +45,18 @@ export async function render(el, ctx) {
     <section class="card secao" aria-labelledby="t-produtos">
       <div class="card-head"><h2 id="t-produtos">Produtos</h2><span class="sub">${vv ? 'valores dos itens, sem frete' : 'por quantidade'}</span></div>
       <div data-b="produtos"></div>
-    </section>`);
+    </section>`, 'dados');
+}
+
+// Síncrono, chamado dentro da troca de aba: a View Transition captura esta estrutura e render() a reaproveita.
+export function esqueleto(el, { eu }) {
+  montar(el, Boolean(eu.verValores));
+}
+
+export async function render(el, ctx) {
+  const vv = Boolean(ctx.eu.verValores);
+  ctx.aplicaveis(['periodo', 'cmp', ...LISTAS]);
+  const { raiz } = montar(el, vv);
 
   const b = (k) => raiz.querySelector(`[data-b="${k}"]`);
   const aviso = raiz.querySelector('.aviso-itens');
@@ -75,7 +88,7 @@ export async function render(el, ctx) {
 
   await Promise.all([
     bloco(b('resumo'), ctx, {
-      esqueleto: cartoesEsqueleto(vv ? 4 : 2, vv ? 's3' : 's6'),
+      esqueleto: esqueletoResumo(vv),
       carregar: () => ctx.api('/api/vendas/resumo', f),
       aoFalhar: () => marcarItens('resumo', false),
       pintar: (d) => {
@@ -117,14 +130,12 @@ function pintarResumo(el, d, vv, f) {
   }
   const antes = (txt) => (c ? `${rotuloCmp(f)}: ${txt}` : '');
   const cartoes = [
-    vv && { rotulo: 'Faturamento', valor: brlK(a.valor), sub: c ? antes(brlK(c.valor)) : brl(a.valor), delta: c ? delta(a.valor, c.valor) : '' },
-    { rotulo: 'Pedidos', valor: int(a.pedidos), sub: antes(int(c?.pedidos)), delta: c ? delta(a.pedidos, c.pedidos) : '' },
-    vv && { rotulo: 'Ticket médio', valor: brl(a.ticket), sub: antes(brl(c?.ticket)), delta: c ? delta(a.ticket, c.ticket) : '' },
-    { rotulo: 'Cancelados', valor: int(a.cancelados), sub: antes(int(c?.cancelados)), delta: c ? delta(a.cancelados, c.cancelados, { subirEhBom: false }) : '' },
+    vv && { rotulo: 'Faturamento', valor: brlK(a.valor), sub: c ? antes(brlK(c.valor)) : brl(a.valor), delta: c ? delta(a.valor, c.valor) : '', chave: 'faturamento', numero: a.valor, formatar: brlK },
+    { rotulo: 'Pedidos', valor: int(a.pedidos), sub: antes(int(c?.pedidos)), delta: c ? delta(a.pedidos, c.pedidos) : '', chave: 'pedidos', numero: a.pedidos, formatar: int },
+    vv && { rotulo: 'Ticket médio', valor: brl(a.ticket), sub: antes(brl(c?.ticket)), delta: c ? delta(a.ticket, c.ticket) : '', chave: 'ticket', numero: a.ticket, formatar: brl },
+    { rotulo: 'Cancelados', valor: int(a.cancelados), sub: antes(int(c?.cancelados)), delta: c ? delta(a.cancelados, c.cancelados, { subirEhBom: false }) : '', contagem: 'cancelados', numero: a.cancelados, formatar: int },
   ].filter(Boolean);
-  const classe = vv ? 's3' : 's6';
-  el.innerHTML = `<div class="grade cartoes">${cartoes.map(() => `<div class="card ${classe}"></div>`).join('')}</div>`;
-  el.querySelectorAll('.card').forEach((card, i) => cartao(card, cartoes[i]));
+  pintarFileira(el, cartoes, vv ? 's3' : 's6');
 }
 
 // ---------- série por dia ----------
