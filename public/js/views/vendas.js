@@ -2,7 +2,7 @@
 import { rotuloValor } from '../barra-filtros.js';
 import { LISTAS } from '../estado.js';
 import { barras, linha } from '../graficos.js';
-import { brl, brlEixo, brlK, CSV_MAX_SERVIDOR, delta, dm, dma, erroCartao, esc, int, semana, tabela } from '../ui.js';
+import { brl, brlEixo, brlK, CSV_MAX_SERVIDOR, delta, deltaPct, dm, dma, erroCartao, esc, int, semana, tabela } from '../ui.js';
 import { bloco, cartoesEsqueleto, estrutura, pintarFileira, rotuloCmp, semDados, temCmp } from './comum.js';
 
 const SEM_CHAVE = '(não informado)';
@@ -18,7 +18,7 @@ const DE_ITENS = new Set(['marca', 'categoria']);
 const AVISO_ITENS = 'Com filtro de marca/categoria, os valores são só dos itens, sem frete.';
 
 // Preferências da sessão (sobrevivem à troca de filtros).
-const pref = { medida: 'valor', ordem: null, busca: '' };
+const pref = { medida: 'valor', ordem: null, busca: '', modo: 'mais' };
 
 // KPIs: os três primeiros fazem morph com os da Visão geral (mesmas chaves).
 const chavesResumo = (vv) => (vv ? ['faturamento', 'pedidos', 'ticket'] : ['pedidos']);
@@ -43,8 +43,11 @@ function montar(el, vv) {
       </section>`).join('')}
     </div>
     <section class="card secao" aria-labelledby="t-produtos">
-      <div class="card-head"><h2 id="t-produtos">Produtos</h2><span class="sub">${vv ? 'valores dos itens, sem frete' : 'por quantidade'}</span></div>
-      <div data-b="produtos"></div>
+      <div class="card-head"><h2 id="t-produtos">Produtos</h2><span class="sub">${vv ? 'valores dos itens, sem frete' : 'por quantidade'}</span>
+        <div class="segmentos" role="group" aria-label="Lista de produtos">
+          ${MODOS_PRODUTOS.map(([m, t]) => `<button type="button" class="segmento" data-modo="${m}">${t}</button>`).join('')}</div>
+      </div>
+      <div data-b="produtos"></div><div class="quebra-pe muted" data-pe="produtos"></div>
     </section>`, 'dados');
 }
 
@@ -85,6 +88,18 @@ export async function render(el, ctx) {
       repintar();
     };
   });
+  const marcarModo = () => raiz.querySelectorAll('[data-modo]').forEach((botao) => {
+    botao.setAttribute('aria-pressed', String(botao.dataset.modo === pref.modo));
+  });
+  marcarModo();
+  raiz.querySelectorAll('[data-modo]').forEach((botao) => {
+    botao.onclick = () => {
+      if (pref.modo === botao.dataset.modo || !ctx.vivo()) return;
+      pref.modo = botao.dataset.modo;
+      marcarModo();
+      produtos(b('produtos'), ctx, vv, raiz);
+    };
+  });
 
   await Promise.all([
     bloco(b('resumo'), ctx, {
@@ -114,7 +129,7 @@ export async function render(el, ctx) {
         pintarQuebra(raiz, b(`q-${por}`), por, d, medida(), ctx);
       },
     })),
-    produtos(b('produtos'), ctx, vv),
+    produtos(b('produtos'), ctx, vv, raiz),
   ]);
 }
 
@@ -201,20 +216,54 @@ function pintarQuebra(raiz, el, por, d, medida, ctx) {
 
 // ---------- produtos (paginação no servidor) ----------
 
-async function produtos(el, ctx, vv) {
-  const ordens = vv ? ['valor', 'qtd', 'pedidos'] : ['qtd', 'pedidos'];
-  if (!ordens.includes(pref.ordem)) pref.ordem = ordens[0];
-  const colunas = [
+const MODOS_PRODUTOS = [['mais', 'Mais vendidos'], ['subiram', 'Subiram'], ['caiu', 'Caíram']];
+const NOTA_VARIACAO = 'Só entram produtos com 3+ pedidos no período de comparação.';
+const SEM_CMP_PRODUTOS = 'Escolha uma comparação na barra para ver o que subiu ou caiu.';
+const VAZIO_PRODUTOS = { mais: 'Nenhum produto vendido no período.', subiram: 'Nenhum produto com variação no período.', caiu: 'Nenhum produto com variação no período.' };
+
+const colVariacao = (chave, titulo) => ({
+  chave, titulo, formato: 'pct', ordenavel: false,
+  celula: (l, td) => { td.innerHTML = deltaPct(l[chave]); },
+});
+
+// Colunas da tabela de produtos por modo; sem R$ somem Faturamento e a variação de preço.
+export function colunasProdutos(modo, vv) {
+  const base = [
     { chave: 'nome', titulo: 'Produto', ordenavel: false },
     { chave: 'sku', titulo: 'SKU', ordenavel: false },
     { chave: 'marca', titulo: 'Marca', ordenavel: false },
     { chave: 'categoria', titulo: 'Categoria', ordenavel: false },
-    { chave: 'qtd', titulo: 'Qtd', formato: 'int', soDesc: true },
-    { chave: 'pedidos', titulo: 'Pedidos', formato: 'int', soDesc: true },
-    ...(vv ? [{ chave: 'valor', titulo: 'Faturamento', formato: 'brl', soDesc: true }] : []),
   ];
+  const valor = vv ? [{ chave: 'valor', titulo: 'Faturamento', formato: 'brl', soDesc: true, ...(modo === 'mais' ? {} : { ordenavel: false }) }] : [];
+  if (modo === 'mais') {
+    return [...base,
+      { chave: 'qtd', titulo: 'Qtd', formato: 'int', soDesc: true },
+      { chave: 'pedidos', titulo: 'Pedidos', formato: 'int', soDesc: true },
+      ...valor];
+  }
+  return [...base,
+    { chave: 'qtd', titulo: 'Qtd', formato: 'int', ordenavel: false },
+    { chave: 'qtdAntes', titulo: 'Antes', formato: 'int', ordenavel: false },
+    colVariacao('varQtd', 'Var.'),
+    ...(vv ? [colVariacao('varPreco', 'Var. preço')] : []),
+    ...valor];
+}
+
+// Troca de aba em sequência rápida: só a geração mais nova pinta.
+let geracaoProdutos = 0;
+
+async function produtos(el, ctx, vv, raiz) {
+  const gen = ++geracaoProdutos;
+  const modo = pref.modo;
+  const ordens = vv ? ['valor', 'qtd', 'pedidos'] : ['qtd', 'pedidos'];
+  if (!ordens.includes(pref.ordem)) pref.ordem = ordens[0];
+  const colunas = colunasProdutos(modo, vv);
+  const nota = raiz?.querySelector('[data-pe="produtos"]');
+  if (nota) nota.textContent = modo === 'mais' ? '' : NOTA_VARIACAO;
+  const atual = () => gen === geracaoProdutos && ctx.vivo();
   const buscar = (pagina) => {
-    const q = new URLSearchParams({ pagina: String(pagina), ordem: pref.ordem });
+    const q = new URLSearchParams({ pagina: String(pagina), modo });
+    if (modo === 'mais') q.set('ordem', pref.ordem);
     if (pref.busca) q.set('busca', pref.busca);
     return ctx.api(`/api/vendas/produtos?${q}`, ctx.filtros);
   };
@@ -225,13 +274,13 @@ async function produtos(el, ctx, vv) {
     const meu = ++seq;
     try {
       const d = await buscar(pagina);
-      if (meu !== seq || !ctx.vivo()) return;
+      if (meu !== seq || !atual()) return;
       t.atualizar({ linhas: d.itens, total: d.total, pagina: d.pagina });
     } catch (e) {
       if (e?.name === 'AbortError' || meu !== seq || !ctx.vivo()) return;
       t.atualizar({});
       delete el.dataset.pintado;
-      erroCartao(el, e?.mensagem || 'Não foi possível carregar os produtos.', () => produtos(el, ctx, vv));
+      erroCartao(el, e?.mensagem || 'Não foi possível carregar os produtos.', () => produtos(el, ctx, vv, raiz));
     }
   };
   const csvTodos = async () => {
@@ -245,23 +294,31 @@ async function produtos(el, ctx, vv) {
     return todas.slice(0, CSV_MAX_SERVIDOR);
   };
   return bloco(el, ctx, {
-    carregar: () => buscar(1),
+    carregar: async () => {
+      const d = await buscar(1);
+      if (gen !== geracaoProdutos) throw new DOMException('Aba de produtos trocada', 'AbortError');
+      return d;
+    },
     pintar: (d) => {
+      if (d.semComparacao) {
+        semDados(el, SEM_CMP_PRODUTOS);
+        return;
+      }
       t = tabela(el, {
         colunas,
         linhas: d.itens,
         busca: true,
-        csv: 'produtos',
-        vazioTexto: 'Nenhum produto vendido no período.',
+        csv: modo === 'mais' ? 'produtos' : `produtos-${modo}`,
+        vazioTexto: VAZIO_PRODUTOS[modo],
         servidor: {
           total: d.total,
           pagina: 1,
           porPagina: d.porPagina,
-          ordem: { chave: pref.ordem, dir: 'desc' },
+          ordem: modo === 'mais' ? { chave: pref.ordem, dir: 'desc' } : null,
           busca: pref.busca,
           aoPagina: (n) => ir(n),
           aoOrdenar: (chave) => {
-            if (!ordens.includes(chave)) return;
+            if (modo !== 'mais' || !ordens.includes(chave)) return;
             pref.ordem = chave;
             ir(1);
           },
