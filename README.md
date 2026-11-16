@@ -72,6 +72,7 @@ Dados fictícios gerados por `scripts/semear-local.mjs`.
    export CF_ACCOUNT_ID=... CF_D1_ID=<database_id> CF_API_TOKEN=...
    node coletores/coletar-pedidos.mjs --config config.json --meses 13
    ```
+   A carga para sozinha no limite de tempo (padrão 300 min) e continua de onde parou na próxima execução com `--meses`.
 7. Publique o painel:
    ```bash
    npx wrangler pages project create minhaloja-painel --production-branch main
@@ -106,9 +107,34 @@ Dados fictícios gerados por `scripts/semear-local.mjs`.
 | `CF_D1_ID` | `database_id` do D1 |
 | `CF_API_TOKEN` | token com permissão de editar o D1 |
 
-Opções do coletor: `--config <arquivo>` (obrigatória), `--dias N` (últimos N dias) ou `--meses N` (histórico por mês).
+Opções do coletor:
+
+| Opção | Para quê |
+|---|---|
+| `--config <arquivo>` | obrigatória |
+| `--dias N` | janela dos últimos N dias, sempre relida (padrão 15) |
+| `--meses N` | também carrega o histórico: os N meses anteriores ao atual e os dias do mês corrente antes da janela |
+| `--limite-minutos N` | tempo máximo da execução (padrão 300); a carga para entre dois dias ao passar dele |
+
+Como a coleta anda:
+
+- A janela roda primeiro e a carga usa o tempo que sobrar. Uma falha numa não impede a outra.
+- Cada dia da carga gravado sem erro fica marcado (`carga:AAAA-MM-DD` na tabela `coletas`); um mês interrompido retoma do próximo dia que falta. O mês inteiro sem erro vira `carga:AAAA-MM` e não é refeito.
+- `coletas` guarda a última tentativa (`quando`, `ok`, `erro`) e a última coleta boa (`ultimo_ok`, migração `0003`). Uma falha não apaga o "dados até": o topo avisa "Última coleta falhou às X; dados até Y".
+- O coletor usa o wrangler fixado no `package.json` (`node_modules` do produto, mesmo rodando de outra pasta) e repete até 3 vezes quando ele falha (5 s, 15 s, 45 s). Rode `npm ci` na pasta do produto antes.
+- Quem roda o coletor de outra pasta (ex.: o produto em `produto/`) aponta o `--config` para o arquivo da instância normalmente; só o wrangler vem do produto.
 
 Arquivos com segredos ou dados da loja (`config.json`, `wrangler.toml`, `.dev.vars`) estão no `.gitignore`.
+
+## Atualizando
+
+Aplique as migrações novas **antes** de rodar o coletor da versão nova (o coletor grava colunas que elas criam):
+
+```bash
+npx wrangler d1 migrations apply painel --remote
+```
+
+Depois publique o `public/` de novo.
 
 ## Permissões
 
