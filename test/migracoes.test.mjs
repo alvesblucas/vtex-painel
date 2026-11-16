@@ -37,3 +37,23 @@ test('upsert de pedido não duplica', async () => {
   assert.equal(results.length, 1);
   assert.equal(results[0].status, 'canceled');
 });
+
+test('0003: coletas ganha ultimo_ok sem perder as linhas que já existem', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { readFileSync } = await import('node:fs');
+  const ler = (f) => readFileSync(new URL(`../migrations/${f}`, import.meta.url), 'utf8');
+  const db = new DatabaseSync(':memory:');
+  db.exec(ler('0001_inicial.sql'));
+  db.exec(ler('0002_perfis_padrao.sql'));
+  const ic = db.prepare('INSERT INTO coletas (fonte, quando, ok, registros, erro) VALUES (?, ?, ?, ?, ?)');
+  ic.run('pedidos', '2026-11-15T15:40:00.000Z', 1, 120, null);
+  ic.run('carga:2026-10', '2026-11-14T10:00:00.000Z', 1, 900, null);
+  ic.run('carga:2026-09', '2026-11-14T11:00:00.000Z', 0, 0, '3 pedidos não abertos');
+  db.exec(ler('0003_coletas_ultimo_ok.sql'));
+  const linhas = db.prepare('SELECT fonte, quando, ok, ultimo_ok FROM coletas ORDER BY fonte').all();
+  assert.deepEqual(linhas.map((l) => [l.fonte, l.ok, l.ultimo_ok]), [
+    ['carga:2026-09', 0, null],
+    ['carga:2026-10', 1, '2026-11-14T10:00:00.000Z'],
+    ['pedidos', 1, '2026-11-15T15:40:00.000Z'],
+  ]);
+});

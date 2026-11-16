@@ -18,9 +18,13 @@ export function hojeLocal(env, agora = Date.now()) {
   return new Date(agora + fusoHoras(env) * HORA_MS).toISOString().slice(0, 10);
 }
 
+// Última coleta boa da fonte: com a última tentativa ok, o próprio quando; se ela falhou, ultimo_ok
+// (gravado pelo coletor; uma falha não apaga o "dados até").
+export const SQL_ULTIMO_OK = 'CASE WHEN ok = 1 THEN quando ELSE ultimo_ok END';
+
 export async function dadosAte(db, fonte) {
-  const r = await db.prepare('SELECT quando FROM coletas WHERE fonte = ? AND ok = 1').bind(fonte).first();
-  return r?.quando ?? null;
+  const r = await db.prepare(`SELECT ${SQL_ULTIMO_OK} AS ate FROM coletas WHERE fonte = ?`).bind(fonte).first();
+  return r?.ate ?? null;
 }
 
 export function filtrosDaRequisicao(context) {
@@ -188,8 +192,13 @@ export async function opcoes(db, desde) {
 }
 
 export async function coletas(db) {
-  const linhas = await todas(db, "SELECT fonte, quando, ok FROM coletas WHERE fonte NOT LIKE 'carga:%' ORDER BY fonte", []);
-  return linhas.map((l) => ({ fonte: l.fonte, quando: l.quando, ok: Boolean(l.ok) }));
+  const linhas = await todas(
+    db,
+    `SELECT fonte, quando, ok, ${SQL_ULTIMO_OK} AS ultimo_ok FROM coletas WHERE fonte NOT LIKE 'carga:%' ORDER BY fonte`,
+    [],
+  );
+  // quando/ok: última tentativa; ultimoOk: última coleta boa (null se nunca houve).
+  return linhas.map((l) => ({ fonte: l.fonte, quando: l.quando, ok: Boolean(l.ok), ultimoOk: l.ultimo_ok ?? null }));
 }
 
 export function lerAgenda(env) {

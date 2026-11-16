@@ -14,8 +14,8 @@ async function alertasDeColeta(db, env, agora) {
   for (const [fonte, regra] of Object.entries(lerAgenda(env))) {
     const horasMax = Number(regra?.horasMax);
     if (!Number.isFinite(horasMax) || horasMax <= 0) continue;
-    const c = await db.prepare('SELECT quando FROM coletas WHERE fonte = ? AND ok = 1').bind(fonte).first();
-    const quando = c?.quando ? Date.parse(c.quando) : NaN;
+    const ultima = await dadosAte(db, fonte);
+    const quando = ultima ? Date.parse(ultima) : NaN;
     if (Number.isNaN(quando)) {
       alertas.push({ nivel: 'aviso', texto: `Coleta de ${fonte}: nenhuma coleta concluída`, aba: 'visao' });
     } else if (agora - quando > horasMax * HORA_MS) {
