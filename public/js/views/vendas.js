@@ -244,10 +244,13 @@ export function colunasProdutos(modo, vv) {
   return [...base,
     { chave: 'qtd', titulo: 'Qtd', formato: 'int', ordenavel: false },
     { chave: 'qtdAntes', titulo: 'Antes', formato: 'int', ordenavel: false },
-    colVariacao('varQtd', 'Var.'),
-    ...(vv ? [colVariacao('varPreco', 'Var. preço')] : []),
+    colVariacao('varQtd', 'Var. %'),
+    ...(vv ? [colVariacao('varPreco', 'Var. preço %')] : []),
     ...valor];
 }
+
+// Nota do rodapé: só nos modos novos e nunca junto do aviso de "sem comparação".
+export const notaProdutos = (modo, semComparacao) => (modo === 'mais' || semComparacao ? '' : NOTA_VARIACAO);
 
 // Troca de aba em sequência rápida: só a geração mais nova pinta.
 let geracaoProdutos = 0;
@@ -272,7 +275,8 @@ async function produtos(el, ctx, vv, raiz) {
   if (!ordens.includes(pref.ordem)) pref.ordem = ordens[0];
   const colunas = colunasProdutos(modo, vv);
   const nota = raiz?.querySelector('[data-pe="produtos"]');
-  if (nota) nota.textContent = modo === 'mais' ? '' : NOTA_VARIACAO;
+  const marcarNota = (semComparacao) => { if (nota) nota.textContent = notaProdutos(modo, semComparacao); };
+  marcarNota(false);
   const atual = () => gen === geracaoProdutos && ctx.vivo();
   const buscar = (pagina) => {
     const q = new URLSearchParams({ pagina: String(pagina), modo });
@@ -309,6 +313,7 @@ async function produtos(el, ctx, vv, raiz) {
   return bloco(el, ctx, {
     carregar: () => soNaGeracao(buscar(1), gen, () => geracaoProdutos),
     pintar: (d) => {
+      marcarNota(Boolean(d.semComparacao));
       if (d.semComparacao) {
         semDados(el, SEM_CMP_PRODUTOS);
         return;

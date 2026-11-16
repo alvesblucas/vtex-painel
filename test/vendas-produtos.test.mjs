@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { colunasProdutos, soNaGeracao } from '../public/js/views/vendas.js';
+import { colunasProdutos, notaProdutos, soNaGeracao } from '../public/js/views/vendas.js';
 
 const chaves = (m, vv) => colunasProdutos(m, vv).map((c) => c.chave);
 
@@ -14,7 +14,7 @@ test('colunasProdutos: modos novos e sem R$', () => {
   assert.deepEqual(chaves('caiu', false), ['nome', 'sku', 'marca', 'categoria', 'qtd', 'qtdAntes', 'varQtd']);
   const vars = colunasProdutos('caiu', true).filter((c) => ['varQtd', 'varPreco'].includes(c.chave));
   assert.ok(vars.every((c) => c.formato === 'pct' && c.ordenavel === false));
-  assert.deepEqual(colunasProdutos('subiram', true).map((c) => c.titulo), ['Produto', 'SKU', 'Marca', 'Categoria', 'Qtd', 'Antes', 'Var.', 'Var. preço', 'Faturamento']);
+  assert.deepEqual(colunasProdutos('subiram', true).map((c) => c.titulo), ['Produto', 'SKU', 'Marca', 'Categoria', 'Qtd', 'Antes', 'Var. %', 'Var. preço %', 'Faturamento']);
 });
 
 test('soNaGeracao: resposta ou erro de geração velha vira AbortError', async () => {
@@ -27,4 +27,10 @@ test('soNaGeracao: resposta ou erro de geração velha vira AbortError', async (
   gen = 2;
   await assert.rejects(velhaOk, (e) => e.name === 'AbortError');
   await assert.rejects(velhaErro, (e) => e.name === 'AbortError');
+});
+
+test('notaProdutos: só nos modos novos e nunca junto do aviso de sem comparação', () => {
+  assert.equal(notaProdutos('mais', false), '');
+  assert.equal(notaProdutos('caiu', false), 'Só entram produtos com 3+ pedidos no período de comparação.');
+  assert.equal(notaProdutos('subiram', true), '');
 });
