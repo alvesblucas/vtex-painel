@@ -111,16 +111,56 @@ export async function quebra(db, f, periodo, por) {
 
 const escaparLike = (s) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
+const filtroBusca = (busca) => (busca
+  ? { sql: "(i.nome LIKE ? ESCAPE '\\' OR i.sku LIKE ? ESCAPE '\\')", params: [`%${escaparLike(busca)}%`, `%${escaparLike(busca)}%`] }
+  : null);
+
 export async function produtos(db, f, periodo, { pagina, porPagina, ordem, busca }) {
-  const extra = busca
-    ? { sql: "(i.nome LIKE ? ESCAPE '\\' OR i.sku LIKE ? ESCAPE '\\')", params: [`%${escaparLike(busca)}%`, `%${escaparLike(busca)}%`] }
-    : null;
-  const b = base(f, periodo, { itens: true, extra });
+  const b = base(f, periodo, { itens: true, extra: filtroBusca(busca) });
   const agrupado = `SELECT i.sku AS sku, MAX(i.nome) AS nome, MAX(i.marca) AS marca, MAX(i.categoria) AS categoria,
        SUM(i.qtd) AS qtd, SUM(i.valor) AS valor, COUNT(DISTINCT p.id) AS pedidos
        FROM ${b.from} WHERE ${b.where} GROUP BY i.sku`;
   const itens = await todas(db, `${agrupado} ORDER BY ${ordem} DESC, sku LIMIT ? OFFSET ?`, [...b.params, porPagina, (pagina - 1) * porPagina]);
   const total = await db.prepare(`SELECT COUNT(*) AS n FROM (${agrupado})`).bind(...b.params).first();
+  return { itens, total: total?.n ?? 0 };
+}
+
+// Produtos que subiram/caíram em quantidade contra o período de comparação. O lado "antes" manda (só SKUs com
+// 3+ pedidos lá): quem zerou aparece com -100%, quem não vendia antes fica de fora (sem base não há variação).
+const MIN_PEDIDOS_ANTES = 3;
+const FILTRO_MODO = { subiram: 'qtd > qtdAntes', caiu: 'qtd < qtdAntes' };
+const ORDEM_MODO = { subiram: 'varQtd DESC, sku', caiu: 'varQtd ASC, sku' };
+
+export async function produtosVariacao(db, f, atual, antes, { modo, pagina, porPagina, busca }) {
+  const extra = filtroBusca(busca);
+  const agregado = (periodo) => {
+    const b = base(f, periodo, { itens: true, extra });
+    return {
+      sql: `SELECT i.sku AS sku, MAX(i.nome) AS nome, MAX(i.marca) AS marca, MAX(i.categoria) AS categoria,
+              SUM(i.qtd) AS qtd, SUM(i.valor) AS valor, COUNT(DISTINCT p.id) AS pedidos
+            FROM ${b.from} WHERE ${b.where} GROUP BY i.sku`,
+      params: b.params,
+    };
+  };
+  const at = agregado(atual);
+  const an = agregado(antes);
+  const juntos = `WITH atual AS (${at.sql}), antes AS (${an.sql} HAVING COUNT(DISTINCT p.id) >= ${MIN_PEDIDOS_ANTES}),
+    j AS (SELECT a.sku AS sku, COALESCE(t.nome, a.nome) AS nome, COALESCE(t.marca, a.marca) AS marca,
+            COALESCE(t.categoria, a.categoria) AS categoria, COALESCE(t.qtd, 0) AS qtd, a.qtd AS qtdAntes,
+            COALESCE(t.pedidos, 0) AS pedidos, COALESCE(t.valor, 0) AS valor, a.valor AS valorAntes,
+            ROUND((COALESCE(t.qtd, 0) - a.qtd) * 100.0 / a.qtd, 1) AS varQtd
+          FROM antes a LEFT JOIN atual t ON t.sku = a.sku)`;
+  const where = FILTRO_MODO[modo];
+  const params = [...at.params, ...an.params];
+  const itens = await todas(
+    db,
+    `${juntos} SELECT sku, nome, marca, categoria, qtd, qtdAntes, pedidos, varQtd, valor,
+       CASE WHEN qtd = 0 OR qtdAntes = 0 OR valorAntes = 0 THEN NULL
+            ELSE ROUND(((valor * 1.0 / qtd) / (valorAntes * 1.0 / qtdAntes) - 1) * 100, 1) END AS varPreco
+     FROM j WHERE ${where} ORDER BY ${ORDEM_MODO[modo]} LIMIT ? OFFSET ?`,
+    [...params, porPagina, (pagina - 1) * porPagina],
+  );
+  const total = await db.prepare(`${juntos} SELECT COUNT(*) AS n FROM j WHERE ${where}`).bind(...params).first();
   return { itens, total: total?.n ?? 0 };
 }
 

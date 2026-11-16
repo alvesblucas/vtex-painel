@@ -293,6 +293,82 @@ test('produtos: busca com % literal, ordem e paginação', async () => {
   assert.equal((await pedir(db, `/api/vendas/produtos?${PERIODO}&pagina=0`, produtos)).status, 400);
 });
 
+// ---------- /api/vendas/produtos?modo=subiram|caiu ----------
+
+const PV = 'de=2026-05-08&ate=2026-05-14&cmp=anterior';
+const pick = (o, chaves) => Object.fromEntries(chaves.map((k) => [k, o[k]]));
+
+// comparação 01–07/05, atual 08–14/05; um item por pedido
+function pedidosVariacao() {
+  const lista = [];
+  let n = 0;
+  const add = (dia, sku, marca, qtd, valor, extra) => {
+    n += 1;
+    lista.push([`v${String(n).padStart(3, '0')}`, dia, 'Sem UTM', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 0,
+      [it(sku, `Produto ${sku}`, marca, 'Cat', qtd, valor)], extra]);
+  };
+  const vezes = (k, dia, sku, marca, qtd, valor) => { for (let i = 0; i < k; i++) add(dia, sku, marca, qtd, valor); };
+  vezes(3, '2026-05-02', 'S1', 'A', 1, 1000);
+  add('2026-05-09', 'S1', 'A', 3, 3300); add('2026-05-10', 'S1', 'A', 1, 1100);
+  add('2026-05-11', 'S1', 'A', 1, 1100); add('2026-05-12', 'S1', 'A', 1, 1100);
+  vezes(4, '2026-05-03', 'S2', 'A', 1, 1000);
+  add('2026-05-09', 'S2', 'A', 1, 1000);
+  add('2026-05-10', 'S2', 'A', 10, 10000, { cancelado: 1 });
+  vezes(3, '2026-05-04', 'S3', 'B', 1, 1000);
+  vezes(2, '2026-05-05', 'S4', 'A', 1, 1000);
+  vezes(5, '2026-05-12', 'S4', 'A', 1, 1000);
+  vezes(5, '2026-05-13', 'S5', 'A', 1, 1000);
+  vezes(3, '2026-05-06', 'S6', 'B', 1, 1000);
+  vezes(3, '2026-05-13', 'S6', 'B', 1, 1000);
+  return lista.map(linha);
+}
+
+async function bancoVariacao() {
+  const db = await banco();
+  await inserirPedidos(db, pedidosVariacao());
+  return db;
+}
+
+test('produtos modo=subiram: só quem subiu com 3+ pedidos antes', async () => {
+  const { corpo } = await pedir(await bancoVariacao(), `/api/vendas/produtos?${PV}&modo=subiram`, produtos);
+  assert.deepEqual(corpo.itens.map((i) => i.sku), ['S1']);
+  assert.equal(corpo.total, 1);
+  assert.deepEqual(
+    pick(corpo.itens[0], ['qtd', 'qtdAntes', 'pedidos', 'varQtd', 'varPreco', 'valor']),
+    { qtd: 6, qtdAntes: 3, pedidos: 4, varQtd: 100, varPreco: 10, valor: 6600 },
+  );
+});
+
+test('produtos modo=caiu: ordem por queda, inclui quem zerou', async () => {
+  const { corpo } = await pedir(await bancoVariacao(), `/api/vendas/produtos?${PV}&modo=caiu`, produtos);
+  assert.deepEqual(corpo.itens.map((i) => [i.sku, i.varQtd, i.varPreco]), [['S3', -100, null], ['S2', -75, 0]]);
+  assert.equal(corpo.itens[0].qtd, 0);
+  assert.equal(corpo.itens[0].nome, 'Produto S3');
+});
+
+test('produtos modo novo respeita filtro de marca nos dois períodos', async () => {
+  const { corpo } = await pedir(await bancoVariacao(), `/api/vendas/produtos?${PV}&modo=caiu&marca=B`, produtos);
+  assert.deepEqual(corpo.itens.map((i) => i.sku), ['S3']);
+});
+
+test('produtos modo novo com busca, cmp=nenhum e modo inválido', async () => {
+  const db = await bancoVariacao();
+  assert.deepEqual((await pedir(db, `/api/vendas/produtos?${PV}&modo=caiu&busca=S2`, produtos)).corpo.itens.map((i) => i.sku), ['S2']);
+  const sem = await pedir(db, '/api/vendas/produtos?de=2026-05-08&ate=2026-05-14&cmp=nenhum&modo=subiram', produtos);
+  assert.equal(sem.status, 200);
+  assert.equal(sem.corpo.semComparacao, true);
+  assert.deepEqual(sem.corpo.itens, []);
+  assert.equal(sem.corpo.total, 0);
+  assert.equal((await pedir(db, `/api/vendas/produtos?${PV}&modo=outro`, produtos)).status, 400);
+});
+
+test('produtos modo novo sem R$ não traz valor nem varPreco', async () => {
+  const { corpo } = await pedir(await bancoVariacao(), `/api/vendas/produtos?${PV}&modo=subiram`, produtos, { email: 'mkt@exemplo.com' });
+  assert.equal('valor' in corpo.itens[0], false);
+  assert.equal('varPreco' in corpo.itens[0], false);
+  assert.equal(corpo.itens[0].varQtd, 100);
+});
+
 // ---------- /api/clientes ----------
 
 test('clientes: só canal Site, novos x recorrentes, por origem e semana', async () => {
@@ -567,13 +643,15 @@ const ROTAS_VAZAMENTO = [
   ['quebra abril', '/api/vendas/quebra?de=2026-04-01&ate=2026-04-01&por=origem', quebra],
   ['produtos', `/api/vendas/produtos?${PERIODO}`, produtos],
   ['produtos ordem=valor', `/api/vendas/produtos?${PERIODO}&ordem=valor`, produtos],
+  ['produtos subiram', `/api/vendas/produtos?${PV}&modo=subiram`, produtos, bancoVariacao],
+  ['produtos caiu', `/api/vendas/produtos?${PV}&modo=caiu`, produtos, bancoVariacao],
   ['clientes', `/api/clientes?${PERIODO}`, clientes],
   ['visao', `/api/visao?${PERIODO}`, visao],
 ];
 
-for (const [nome, rota, handler] of ROTAS_VAZAMENTO) {
+for (const [nome, rota, handler, criar = banco] of ROTAS_VAZAMENTO) {
   test(`R10 vazamento: ${nome} sem R$ não traz nenhum valor em centavos`, async () => {
-    const db = await banco();
+    const db = await criar();
     const cheio = await pedir(db, rota, handler);
     assert.equal(cheio.status, 200);
     const proibidos = new Set([...CENTAVOS, ...valoresDeDinheiro(cheio.corpo).filter((v) => v >= 1000)]);

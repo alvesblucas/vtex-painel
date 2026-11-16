@@ -1,5 +1,5 @@
 // Remove campos em R$ das respostas para quem não pode ver valores (remove, não zera).
-export const CAMPOS_VALOR = ['valor', 'ticket', 'frete', 'desconto', 'preco', 'valorCmp', 'ticketCmp', 'cmpValor'];
+export const CAMPOS_VALOR = ['valor', 'ticket', 'frete', 'desconto', 'preco', 'valorCmp', 'ticketCmp', 'cmpValor', 'varPreco'];
 
 const CAMPOS = new Set(CAMPOS_VALOR);
 
