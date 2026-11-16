@@ -252,6 +252,19 @@ export function colunasProdutos(modo, vv) {
 // Troca de aba em sequência rápida: só a geração mais nova pinta.
 let geracaoProdutos = 0;
 
+// Resposta ou erro de uma geração que já foi trocada vira AbortError (bloco() ignora em silêncio).
+export async function soNaGeracao(promessa, gen, geracaoAtual) {
+  const velha = () => new DOMException('Aba de produtos trocada', 'AbortError');
+  let d;
+  try {
+    d = await promessa;
+  } catch (e) {
+    throw gen === geracaoAtual() ? e : velha();
+  }
+  if (gen !== geracaoAtual()) throw velha();
+  return d;
+}
+
 async function produtos(el, ctx, vv, raiz) {
   const gen = ++geracaoProdutos;
   const modo = pref.modo;
@@ -277,7 +290,7 @@ async function produtos(el, ctx, vv, raiz) {
       if (meu !== seq || !atual()) return;
       t.atualizar({ linhas: d.itens, total: d.total, pagina: d.pagina });
     } catch (e) {
-      if (e?.name === 'AbortError' || meu !== seq || !ctx.vivo()) return;
+      if (e?.name === 'AbortError' || meu !== seq || !atual()) return;
       t.atualizar({});
       delete el.dataset.pintado;
       erroCartao(el, e?.mensagem || 'Não foi possível carregar os produtos.', () => produtos(el, ctx, vv, raiz));
@@ -294,11 +307,7 @@ async function produtos(el, ctx, vv, raiz) {
     return todas.slice(0, CSV_MAX_SERVIDOR);
   };
   return bloco(el, ctx, {
-    carregar: async () => {
-      const d = await buscar(1);
-      if (gen !== geracaoProdutos) throw new DOMException('Aba de produtos trocada', 'AbortError');
-      return d;
-    },
+    carregar: () => soNaGeracao(buscar(1), gen, () => geracaoProdutos),
     pintar: (d) => {
       if (d.semComparacao) {
         semDados(el, SEM_CMP_PRODUTOS);
