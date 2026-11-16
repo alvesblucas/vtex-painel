@@ -66,7 +66,7 @@ for (const [categoria, nomes] of CATEGORIAS) {
     for (let v = 0; v < 8; v++) {
       const marca = MARCAS[entre(0, MARCAS.length - 1)];
       const preco = categoria === 'Aparelhos' ? entre(4990, 32990) : entre(390, 8990);
-      PRODUTOS.push({ sku: `SKU${String(PRODUTOS.length + 1).padStart(4, '0')}`, nome: `${nome} ${['P', 'M', 'G', 'cx', 'un'][entre(0, 4)]} ${marca.split(/[ ,]/)[0]}`, marca, categoria, preco, peso: entre(1, 10) });
+      PRODUTOS.push({ sku: String(1000 + (PRODUTOS.length + 1) * 37), nome: `${nome} ${['P', 'M', 'G', 'cx', 'un'][entre(0, 4)]} ${marca.split(/[ ,]/)[0]}`, marca, categoria, preco, peso: entre(1, 10) });
     }
   }
 }
