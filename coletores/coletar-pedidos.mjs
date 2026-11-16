@@ -1,5 +1,7 @@
 // Coletor de pedidos: OMS da VTEX -> D1 (pedidos, itens, coletas), sem dado pessoal.
-// Uso: node coletores/coletar-pedidos.mjs --config <caminho> (--dias 15 | --meses 13)
+// Uso: node coletores/coletar-pedidos.mjs --config <caminho> [--dias 15] [--meses 13] [--limite-minutos 300]
+// Roda primeiro a janela dos últimos --dias (padrão 15) e depois, com --meses, a carga histórica até o
+// limite de tempo (padrão 300 min, contado desde o início da execução).
 import { writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -15,6 +17,7 @@ const PARALELO = 5;
 const PAUSA_MS = 100;
 const LIMITE_ERROS = 30;
 const BLOCO_DELETE = 200;
+const LIMITE_MINUTOS = 300;
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- datas ----------
@@ -46,6 +49,22 @@ export function diasDoMes(mes) {
   return Array.from({ length: total }, (_, i) => `${mes}-${String(i + 1).padStart(2, '0')}`);
 }
 
+// Plano da carga: os meses anteriores ao atual ainda sem marcador e, no mês corrente, os dias antes da
+// janela (nenhuma janela futura volta a eles). `feitos`: fontes `carga:` com ok = 1, sem o prefixo —
+// mês fechado (AAAA-MM) ou dia gravado por uma carga anterior (AAAA-MM-DD), que fica de fora: um mês
+// interrompido retoma do próximo dia que falta. `fecha`: o mês ganha o marcador quando terminar sem erro;
+// o mês corrente nunca fecha (só fecha na carga do mês seguinte, como mês anterior).
+export function planoDaCarga(meses, hojeLocalDia, inicioJanela, feitos) {
+  const atual = hojeLocalDia.slice(0, 7);
+  const plano = [
+    ...mesesPendentes(meses, hojeLocalDia, feitos).map((mes) => ({ mes, fecha: true, dias: diasDoMes(mes) })),
+    { mes: atual, fecha: false, dias: diasDoMes(atual).filter((d) => d < inicioJanela) },
+  ];
+  return plano
+    .map((m) => ({ ...m, dias: m.dias.filter((d) => !feitos.has(d)) }))
+    .filter((m) => m.fecha || m.dias.length);
+}
+
 export function limparErro(erro, segredos = []) {
   let msg = String(erro?.message ?? erro);
   for (const s of segredos) if (s && s.length >= 6) msg = msg.replaceAll(s, '***');
@@ -55,9 +74,9 @@ export function limparErro(erro, segredos = []) {
 // ---------- OMS ----------
 // A listagem para em 30 páginas de 100 (3.000 pedidos); um dia cabe com folga.
 // `dia`: listagem de um dia inteiro; se passar de 30 páginas, falha em vez de contar a menos.
-async function listarPedidos(vtex, de, ate, extra = {}, dia = null) {
+async function listarPedidos(vtex, de, ate, extra = {}, dia = null, paginas = 30) {
   const saida = [];
-  for (let pagina = 1; pagina <= 30; pagina++) {
+  for (let pagina = 1; pagina <= paginas; pagina++) {
     const q = new URLSearchParams({
       f_creationDate: `creationDate:[${new Date(de).toISOString()} TO ${new Date(ate - 1).toISOString()}]`,
       per_page: '100',
@@ -76,11 +95,13 @@ async function listarPedidos(vtex, de, ate, extra = {}, dia = null) {
 }
 
 // Regra do relatório de clientes novos: a busca `q` é por texto, então abre até 3 candidatos
-// anteriores (não cancelados) e confere se a chave é a mesma.
+// anteriores (não cancelados) e confere se a chave é a mesma. Só a 1ª página (mais recentes primeiro):
+// paginar até 30 páginas para usar 3 candidatos era o que mais pesava na carga.
 async function temCompraAnterior(vtex, pedido, chave, cfg) {
   const criado = Date.parse(pedido.creationDate);
+  const filtro = { q: chave, salesChannelId: String(cfg.canalSite ?? '1'), per_page: '20' };
   const candidatos = (
-    await listarPedidos(vtex, criado - HISTORICO_DIAS * DIA_MS, criado, { q: chave, salesChannelId: String(cfg.canalSite ?? '1') })
+    await listarPedidos(vtex, criado - HISTORICO_DIAS * DIA_MS, criado, filtro, null, 1)
   ).filter((o) => o.orderId !== pedido.orderId && o.status !== 'canceled' && Date.parse(o.creationDate) < criado);
   for (const c of candidatos.slice(0, 3)) {
     const anterior = await vtex.get(`/api/oms/pvt/orders/${c.orderId}`);
@@ -185,15 +206,22 @@ export async function registrarColeta(d1, { fonte, quando, ok, registros, erro }
 }
 
 // deps = { vtex, d1, cfg, aplicar(sql), agora(), esperar?, log?, cache?, contador? }
-export async function coletarDias(dias, deps, { fonte = 'pedidos' } = {}) {
+function completar(deps) {
   const d = {
     esperar: dormir,
     log: console.log,
     cache: new Map(),
     ...deps,
   };
-  // Contador compartilhado entre chamadas (carga + janela): completa os campos no próprio objeto.
+  // Contador compartilhado entre chamadas: completa os campos no próprio objeto.
   d.contador = Object.assign(deps.contador ?? {}, { erros: 0, naoAbertos: 0, parar: false, ...deps.contador });
+  return d;
+}
+
+const descreverErros = (erros, naoAbertos) => (naoAbertos > 0 ? `${naoAbertos} pedidos não abertos` : `${erros} pedidos com erro`);
+
+export async function coletarDias(dias, deps, { fonte = 'pedidos' } = {}) {
+  const d = completar(deps);
   const errosAntes = d.contador.erros;
   const naoAbertosAntes = d.contador.naoAbertos;
   const total = { pedidos: 0, itens: 0 };
@@ -206,23 +234,131 @@ export async function coletarDias(dias, deps, { fonte = 'pedidos' } = {}) {
   const naoAbertos = d.contador.naoAbertos - naoAbertosAntes;
   // Mês da carga só fica feito sem erro; senão a próxima execução refaz o mês.
   const falhou = fonte.startsWith('carga:') && erros > 0;
-  const erro = !falhou ? null : naoAbertos > 0 ? `${naoAbertos} pedidos não abertos` : `${erros} pedidos com erro`;
+  const erro = falhou ? descreverErros(erros, naoAbertos) : null;
   await registrarColeta(d.d1, { fonte, quando: d.agora(), ok: falhou ? 0 : 1, registros: total.pedidos, erro });
   return { ...total, erros };
 }
 
+// ---------- carga histórica ----------
+async function registrarSemFalhar(d1, linha, logErro, segredos) {
+  try {
+    await registrarColeta(d1, linha);
+  } catch (e) {
+    logErro(`Não foi possível registrar a coleta ${linha.fonte}: ${limparErro(e, segredos)}`);
+  }
+}
+
+// Carga dia a dia até o `prazo` (ms do `relogio`), conferido antes de cada dia: ao passar, para entre dois
+// dias e avisa quanto falta. Cada dia gravado sem erro deixa o marcador `carga:AAAA-MM-DD`; o mês fecha
+// (`carga:AAAA-MM` com ok = 1, que as próximas cargas pulam) quando todos os dias ficaram sem erro, e aí
+// os marcadores dos dias saem. Exceção (30 erros, wrangler) fica registrada em `carga:AAAA-MM` e é repassada.
+// deps = os de coletarDias + segredos?, logErro?
+export async function executarCarga(plano, deps, { prazo = Infinity, relogio = Date.now } = {}) {
+  const d = completar(deps);
+  const segredos = d.segredos ?? [];
+  const logErro = d.logErro ?? console.error;
+  const total = { dias: 0, pedidos: 0, itens: 0, erros: 0, completa: true };
+  for (const [i, { mes, dias, fecha }] of plano.entries()) {
+    const noMes = { erros: 0, naoAbertos: 0, pedidos: 0 };
+    try {
+      for (const [j, dia] of dias.entries()) {
+        if (relogio() >= prazo) {
+          const resto = plano.slice(i + 1).reduce((n, m) => n + m.dias.length, dias.length - j);
+          const meses = [mes, ...plano.slice(i + 1).map((m) => m.mes)].join(', ');
+          d.log(`Carga parou no limite de tempo antes de ${dia}; faltam ${resto} dias (${meses}). A próxima carga continua daqui.`);
+          total.completa = false;
+          return total;
+        }
+        const antes = { erros: d.contador.erros, naoAbertos: d.contador.naoAbertos };
+        const r = await coletarDia(dia, d);
+        total.dias++;
+        total.pedidos += r.pedidos;
+        total.itens += r.itens;
+        noMes.pedidos += r.pedidos;
+        const erros = d.contador.erros - antes.erros;
+        if (erros) {
+          noMes.erros += erros;
+          noMes.naoAbertos += d.contador.naoAbertos - antes.naoAbertos;
+        } else {
+          await registrarColeta(d.d1, { fonte: `carga:${dia}`, quando: d.agora(), ok: 1, registros: r.pedidos, erro: null });
+        }
+      }
+    } catch (e) {
+      const erro = limparErro(e, segredos);
+      await registrarSemFalhar(d.d1, { fonte: `carga:${mes}`, quando: d.agora(), ok: 0, registros: noMes.pedidos, erro }, logErro, segredos);
+      throw e;
+    }
+    total.erros += noMes.erros;
+    if (noMes.erros) {
+      // Dias com erro ficaram sem marcador: a próxima carga refaz só eles.
+      const erro = descreverErros(noMes.erros, noMes.naoAbertos);
+      await registrarColeta(d.d1, { fonte: `carga:${mes}`, quando: d.agora(), ok: 0, registros: noMes.pedidos, erro });
+    } else if (fecha) {
+      await registrarColeta(d.d1, { fonte: `carga:${mes}`, quando: d.agora(), ok: 1, registros: noMes.pedidos, erro: null });
+      await d.d1.consulta('DELETE FROM coletas WHERE fonte LIKE ?', [`carga:${mes}-%`]);
+    }
+  }
+  return total;
+}
+
+// Uma execução: janela primeiro (dado fresco tem prioridade), depois a carga com o tempo que sobrar.
+// Cada parte tem o próprio contador de erros, e a falha de uma não impede a outra: falha da janela
+// fica em `pedidos` (sem apagar ultimo_ok), falha da carga em `carga:AAAA-MM`.
+export async function rodar({ dias = 15, meses = 0, hoje, prazo = Infinity, relogio = Date.now, segredos = [] }, deps) {
+  const base = { cache: new Map(), segredos, ...deps };
+  const log = base.log ?? console.log;
+  const logErro = base.logErro ?? console.error;
+  const novoContador = () => ({ erros: 0, naoAbertos: 0, parar: false });
+  const total = { dias: 0, pedidos: 0, itens: 0, erros: 0 };
+  const somar = (n, r) => {
+    total.dias += n;
+    total.pedidos += r.pedidos;
+    total.itens += r.itens;
+    total.erros += r.erros;
+  };
+  let ok = true;
+
+  const janela = diasDaJanela(hoje, dias);
+  try {
+    somar(janela.length, await coletarDias(janela, { ...base, contador: novoContador() }));
+  } catch (e) {
+    ok = false;
+    const erro = limparErro(e, segredos);
+    logErro(`Janela de ${dias} dias falhou: ${erro}`);
+    await registrarSemFalhar(base.d1, { fonte: 'pedidos', quando: base.agora(), ok: 0, registros: 0, erro }, logErro, segredos);
+  }
+
+  if (meses) {
+    try {
+      const feitas = await base.d1.consulta("SELECT fonte FROM coletas WHERE fonte LIKE 'carga:%' AND ok = 1");
+      const feitos = new Set(feitas.map((r) => r.fonte.slice('carga:'.length)));
+      const plano = planoDaCarga(meses, hoje, janela[0], feitos);
+      const r = await executarCarga(plano, { ...base, contador: novoContador() }, { prazo, relogio });
+      somar(r.dias, r);
+      if (r.completa) log('Carga histórica completa.');
+    } catch (e) {
+      ok = false;
+      logErro(`Carga histórica falhou: ${limparErro(e, segredos)}`);
+    }
+  }
+  log(`Fim. dias=${total.dias} pedidos=${total.pedidos} itens=${total.itens} erros=${total.erros}`);
+  return { ok, ...total };
+}
+
 // ---------- CLI ----------
-function lerArgs(argv) {
+const USO = 'Uso: node coletores/coletar-pedidos.mjs --config <caminho> [--dias 15] [--meses 13] [--limite-minutos 300]';
+
+export function lerArgs(argv) {
   const args = {};
   for (let i = 0; i < argv.length; i += 2) {
     const nome = argv[i]?.replace(/^--/, '');
-    if (!['config', 'dias', 'meses'].includes(nome) || argv[i + 1] === undefined) {
-      throw new Error('Uso: node coletores/coletar-pedidos.mjs --config <caminho> (--dias 15 | --meses 13)');
+    if (!['config', 'dias', 'meses', 'limite-minutos'].includes(nome) || argv[i + 1] === undefined) {
+      throw new Error(USO);
     }
     args[nome] = argv[i + 1];
   }
   if (!args.config) throw new Error('Falta --config <caminho>');
-  for (const k of ['dias', 'meses']) {
+  for (const k of ['dias', 'meses', 'limite-minutos']) {
     if (args[k] !== undefined && !/^[1-9]\d*$/.test(args[k])) throw new Error(`--${k} deve ser inteiro positivo`);
   }
   return args;
@@ -249,6 +385,7 @@ function criarAplicar(banco) {
 }
 
 async function principal() {
+  const inicio = Date.now();
   const args = lerArgs(process.argv.slice(2));
   const cfg = carregarConfig(args.config);
   const env = process.env;
@@ -265,24 +402,16 @@ async function principal() {
       cfg,
       aplicar: criarAplicar(env.D1_NOME || 'painel'),
       agora,
-      cache: new Map(),
-      contador: { erros: 0, naoAbertos: 0, parar: false },
     };
-    const hoje = hojeLocal(cfg.fusoHoras);
-    const total = { dias: 0, pedidos: 0, itens: 0 };
-    const somar = (dias, r) => { total.dias += dias.length; total.pedidos += r.pedidos; total.itens += r.itens; };
-
-    if (args.meses) {
-      const feitas = await d1.consulta("SELECT fonte FROM coletas WHERE fonte LIKE 'carga:%' AND ok = 1");
-      const feitos = new Set(feitas.map((r) => r.fonte.slice('carga:'.length)));
-      for (const mes of mesesPendentes(Number(args.meses), hoje, feitos)) {
-        const dias = diasDoMes(mes);
-        somar(dias, await coletarDias(dias, deps, { fonte: `carga:${mes}` }));
-      }
-    }
-    const janela = diasDaJanela(hoje, Number(args.dias ?? 15));
-    somar(janela, await coletarDias(janela, deps));
-    console.log(`Fim. dias=${total.dias} pedidos=${total.pedidos} itens=${total.itens} erros=${deps.contador.erros}`);
+    const minutos = Number(args['limite-minutos'] ?? LIMITE_MINUTOS);
+    const r = await rodar({
+      dias: Number(args.dias ?? 15),
+      meses: Number(args.meses ?? 0),
+      hoje: hojeLocal(cfg.fusoHoras),
+      prazo: inicio + minutos * 60_000,
+      segredos,
+    }, deps);
+    if (!r.ok) process.exitCode = 1;
   } catch (e) {
     const erro = limparErro(e, segredos);
     console.error(`Falhou: ${erro}`);

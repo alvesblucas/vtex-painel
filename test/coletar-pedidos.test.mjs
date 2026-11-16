@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { criarVtex } from '../coletores/vtex.mjs';
 import {
   diasDaJanela, mesesPendentes, diasDoMes, hojeLocal, coletarDias, limparErro, registrarColeta,
+  planoDaCarga, executarCarga, rodar, lerArgs,
 } from '../coletores/coletar-pedidos.mjs';
 import { criarD1Falso } from './d1-falso.mjs';
 
@@ -291,4 +292,172 @@ test('registrarColeta: falha guarda a tentativa e mantém a última coleta boa (
   // primeira coleta da fonte já falhando: sem ultimo_ok
   await registrarColeta(deps.d1, { fonte: 'estoque', quando: '2026-11-16T03:45:00.000Z', ok: 0, registros: 0, erro: 'x' });
   assert.equal((await db.prepare("SELECT ultimo_ok FROM coletas WHERE fonte = 'estoque'").first()).ultimo_ok, null);
+});
+
+// ---------- carga x janela (I1, I3, I4) ----------
+
+// Dias listados (sem busca q), na ordem em que a OMS foi chamada.
+const diasListados = (vtex) => vtex.chamadas
+  .filter((c) => c.startsWith('/api/oms/pvt/orders?') && !c.includes('q='))
+  .map((c) => /creationDate:\[(\d{4}-\d{2}-\d{2})/.exec(new URL(c, 'http://x').searchParams.get('f_creationDate'))[1]);
+const fontes = async (db) => (await db.prepare('SELECT fonte, ok, erro, ultimo_ok FROM coletas ORDER BY fonte').all()).results;
+const porFonte = async (db) => Object.fromEntries((await fontes(db)).map((c) => [c.fonte, c]));
+const feitosDe = async (db) => new Set(
+  (await db.prepare("SELECT fonte FROM coletas WHERE fonte LIKE 'carga:%' AND ok = 1").all()).results.map((r) => r.fonte.slice(6)),
+);
+
+test('planoDaCarga: meses pendentes, dias já gravados e o começo do mês corrente (I4)', () => {
+  const feitos = new Set(['2026-10', '2026-09-01', '2026-09-02']);
+  const plano = planoDaCarga(3, '2026-11-28', '2026-11-14', feitos);
+  assert.deepEqual(plano.map((p) => [p.mes, p.fecha, p.dias[0], p.dias.at(-1), p.dias.length]), [
+    ['2026-08', true, '2026-08-01', '2026-08-31', 31],
+    ['2026-09', true, '2026-09-03', '2026-09-30', 28],
+    ['2026-11', false, '2026-11-01', '2026-11-13', 13],
+  ]);
+  // janela já cobre o mês corrente desde o dia 1: nada do mês corrente na carga
+  assert.deepEqual(planoDaCarga(1, '2026-11-10', '2026-10-27', new Set()).map((p) => p.mes), ['2026-10']);
+  // dia do mês corrente já gravado fica de fora
+  assert.deepEqual(planoDaCarga(1, '2026-11-20', '2026-11-06', new Set(['2026-10', '2026-11-01'])),
+    [{ mes: '2026-11', fecha: false, dias: ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05'] }]);
+  // todos os dias gravados mas sem o marcador do mês: entra vazio só para fechar o mês
+  const todos = new Set(diasDoMes('2026-10'));
+  assert.deepEqual(planoDaCarga(1, '2026-11-10', '2026-10-27', todos), [{ mes: '2026-10', fecha: true, dias: [] }]);
+});
+
+test('lerArgs: --dias e --meses continuam valendo; --limite-minutos novo', () => {
+  assert.deepEqual(lerArgs(['--config', 'c.json', '--dias', '15']), { config: 'c.json', dias: '15' });
+  assert.deepEqual(lerArgs(['--config', 'c.json', '--meses', '13']), { config: 'c.json', meses: '13' });
+  assert.deepEqual(lerArgs(['--config', 'c.json', '--dias', '15', '--meses', '13', '--limite-minutos', '300']),
+    { config: 'c.json', dias: '15', meses: '13', 'limite-minutos': '300' });
+  assert.throws(() => lerArgs(['--config', 'c.json', '--limite-minutos', '0']), /inteiro positivo/);
+  assert.throws(() => lerArgs(['--config', 'c.json', '--minutos', '5']), /Uso/);
+});
+
+test('rodar: janela antes da carga; carga cobre o começo do mês corrente (hoje = 28/11)', async () => {
+  const vtex = vtexFalso([]);
+  const { db, deps } = await montar(vtex);
+  const r = await rodar({ dias: 15, meses: 1, hoje: '2026-11-28' }, deps);
+  assert.equal(r.ok, true);
+  const dias = diasListados(vtex);
+  assert.deepEqual(dias.slice(0, 15), diasDaJanela('2026-11-28', 15));
+  assert.equal(dias.length, 15 + 31 + 13);
+  assert.ok(dias.includes('2026-11-01') && dias.includes('2026-11-13'));
+  const f = await porFonte(db);
+  assert.equal(f['carga:2026-10'].ok, 1);
+  assert.ok(!Object.keys(f).some((k) => k.startsWith('carga:2026-10-')), 'marcadores por dia do mês fechado são apagados');
+  assert.ok(!f['carga:2026-11'], 'mês corrente não fecha');
+  assert.equal(f['carga:2026-11-13'].ok, 1);
+  assert.equal(f.pedidos.ok, 1);
+
+  // segunda execução: mês fechado e dias do mês corrente já gravados são pulados
+  const vtex2 = vtexFalso([]);
+  await rodar({ dias: 15, meses: 1, hoje: '2026-11-28' }, { ...deps, vtex: vtex2 });
+  assert.equal(diasListados(vtex2).length, 15);
+});
+
+test('rodar: marcador de mês já existente (produção) continua pulado', async () => {
+  const vtex = vtexFalso([]);
+  const { db, deps } = await montar(vtex);
+  await db.prepare("INSERT INTO coletas (fonte, quando, ok, registros, erro) VALUES ('carga:2026-10', ?, 1, 900, NULL)").bind(AGORA).run();
+  await rodar({ dias: 15, meses: 1, hoje: '2026-11-10' }, deps);
+  assert.deepEqual(diasListados(vtex), diasDaJanela('2026-11-10', 15));
+});
+
+test('rodar: falha na carga fica em carga:AAAA-MM e não apaga a coleta da janela (I1)', async () => {
+  const a = pedido('1000000000001-01', '2026-10-05T13:00:00.000Z');
+  const vtex = vtexFalso([a]);
+  const { db, deps } = await montar(vtex);
+  const erros = [];
+  const aplicar = async () => { throw new Error('wrangler saiu com código 1: ETARGET'); };
+  const r = await rodar({ dias: 15, meses: 1, hoje: '2026-11-10' }, { ...deps, aplicar, logErro: (m) => erros.push(m) });
+  assert.equal(r.ok, false);
+  const f = await porFonte(db);
+  assert.equal(f.pedidos.ok, 1);
+  assert.equal(f.pedidos.ultimo_ok, AGORA);
+  assert.equal(f['carga:2026-10'].ok, 0);
+  assert.match(f['carga:2026-10'].erro, /ETARGET/);
+  assert.equal(f['carga:2026-10-04'].ok, 1, 'dias anteriores à falha ficam gravados');
+  assert.ok(!f['carga:2026-10-05']);
+  assert.ok(erros.some((m) => /Carga histórica falhou/.test(m)), erros.join('\n'));
+});
+
+test('rodar: falha na janela não impede a carga e mantém o ultimo_ok de pedidos (I1)', async () => {
+  const vtex = vtexFalso([]);
+  const original = vtex.get;
+  const janela = new Set(diasDaJanela('2026-11-10', 15));
+  vtex.get = (c) => {
+    const f = new URL(c, 'http://x').searchParams.get('f_creationDate') ?? '';
+    const dia = /\[(\d{4}-\d{2}-\d{2})/.exec(f)?.[1];
+    return janela.has(dia) ? Promise.reject(new Error('GET /api/oms/pvt/orders -> 503')) : original(c);
+  };
+  const { db, deps } = await montar(vtex);
+  await registrarColeta(deps.d1, { fonte: 'pedidos', quando: '2026-11-09T15:40:00.000Z', ok: 1, registros: 5, erro: null });
+  const r = await rodar({ dias: 15, meses: 1, hoje: '2026-11-10' }, { ...deps, logErro: () => {} });
+  assert.equal(r.ok, false);
+  const f = await porFonte(db);
+  assert.equal(f.pedidos.ok, 0);
+  assert.match(f.pedidos.erro, /503/);
+  assert.equal(f.pedidos.ultimo_ok, '2026-11-09T15:40:00.000Z');
+  // a carga rodou: os dias de outubro antes da janela foram gravados; os da janela (27 a 31/10) falharam
+  assert.equal(f['carga:2026-10-26'].ok, 1);
+  assert.equal(f['carga:2026-10'].ok, 0);
+});
+
+test('executarCarga: para no limite de tempo entre dias e retoma do próximo dia que falta (I3)', async () => {
+  const { db, deps } = await montar(vtexFalso([]));
+  const logs = [];
+  let agora = 0;
+  // cada consulta do relógio avança 1 min; prazo de 10 min → para no meio do mês
+  const relogio = () => (agora += 60_000);
+  const plano1 = planoDaCarga(1, '2026-11-10', '2026-10-27', await feitosDe(db));
+  const r1 = await executarCarga(plano1, { ...deps, log: (m) => logs.push(m) }, { prazo: 10 * 60_000, relogio });
+  assert.equal(r1.completa, false);
+  assert.equal(r1.dias, 9);
+  assert.ok(logs.some((m) => /limite de tempo/.test(m) && /faltam 22 dias/.test(m)), logs.join('\n'));
+  let f = await porFonte(db);
+  assert.ok(!f['carga:2026-10']);
+  assert.equal(Object.keys(f).filter((k) => k.startsWith('carga:2026-10-')).length, 9);
+
+  const vtex2 = vtexFalso([]);
+  const plano2 = planoDaCarga(1, '2026-11-10', '2026-10-27', await feitosDe(db));
+  assert.equal(plano2[0].dias[0], '2026-10-10');
+  const r2 = await executarCarga(plano2, { ...deps, vtex: vtex2 });
+  assert.equal(r2.completa, true);
+  assert.equal(diasListados(vtex2).length, 22);
+  f = await porFonte(db);
+  assert.equal(f['carga:2026-10'].ok, 1);
+  assert.ok(!Object.keys(f).some((k) => k.startsWith('carga:2026-10-')));
+});
+
+test('executarCarga: dia com erro fica sem marcador e o mês não fecha', async () => {
+  const a = pedido('1000000000001-01', '2026-10-05T13:00:00.000Z');
+  const vtex = vtexFalso([a]);
+  const original = vtex.get;
+  vtex.get = (c) => (c.endsWith('/1000000000001-01') ? Promise.reject(new Error('falhou')) : original(c));
+  const { db, deps } = await montar(vtex);
+  const r = await executarCarga(planoDaCarga(1, '2026-11-10', '2026-10-27', new Set()), deps);
+  assert.equal(r.erros, 1);
+  const f = await porFonte(db);
+  assert.equal(f['carga:2026-10'].ok, 0);
+  assert.equal(f['carga:2026-10'].erro, '1 pedidos não abertos');
+  assert.ok(!f['carga:2026-10-05']);
+  assert.equal(f['carga:2026-10-06'].ok, 1);
+  // próxima carga refaz só o dia que faltou e fecha o mês
+  const plano = planoDaCarga(1, '2026-11-10', '2026-10-27', await feitosDe(db));
+  assert.deepEqual(plano[0].dias, ['2026-10-05']);
+  await executarCarga(plano, { ...deps, vtex: vtexFalso([a]) });
+  assert.equal((await db.prepare("SELECT ok FROM coletas WHERE fonte = 'carga:2026-10'").first()).ok, 1);
+});
+
+test('busca de compra anterior lê só a primeira página', async () => {
+  const a = pedido('1000000000001-01', '2026-11-12T13:00:00.000Z');
+  const vtex = vtexFalso([a]);
+  const original = vtex.get;
+  vtex.get = async (c) => {
+    const r = await original(c);
+    return c.includes('q=') ? { ...r, paging: { pages: 30 } } : r;
+  };
+  const { deps } = await montar(vtex);
+  await coletarDias(['2026-11-12'], deps);
+  assert.equal(vtex.buscas(), 1);
 });
