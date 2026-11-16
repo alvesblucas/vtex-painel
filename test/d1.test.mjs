@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sqlValor, upsertSql, criarD1Rest, aplicarArquivo } from '../coletores/d1.mjs';
+import { sqlValor, upsertSql, criarD1Rest, aplicarArquivo, aplicarComRetentativa, WRANGLER_JS } from '../coletores/d1.mjs';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { criarD1Falso } from './d1-falso.mjs';
 
 test('sqlValor escapa e converte tipos', () => {
@@ -107,21 +109,84 @@ function filhoFalso(codigo, stderr) {
   };
 }
 
-test('aplicarArquivo: saída ≠ 0 rejeita com stderr', async () => {
-  let args;
-  const falso = (cmd, a) => { args = a; return filhoFalso(1, 'boom'); };
-  await assert.rejects(aplicarArquivo('x.sql', 'painel', { spawn: falso, plataforma: 'linux' }), /boom/);
-  assert.ok(args.includes('--file=x.sql'));
+test('aplicarArquivo: usa o wrangler do produto via node, sem npx nem shell', async () => {
+  let chamada;
+  const falso = (cmd, a, o) => { chamada = { cmd, a, o }; return filhoFalso(1, 'boom'); };
+  await assert.rejects(aplicarArquivo('x.sql', 'painel', { spawn: falso }), /boom/);
+  assert.equal(chamada.cmd, process.execPath);
+  assert.equal(chamada.a[0], WRANGLER_JS);
+  assert.deepEqual(chamada.a.slice(1), ['d1', 'execute', 'painel', '--remote', '--file=x.sql', '--yes']);
+  assert.ok(!chamada.o.shell);
   await aplicarArquivo('x.sql', 'painel', { spawn: () => filhoFalso(0) });
 });
 
-test('aplicarArquivo: valida banco e caminho; aspas no win32', async () => {
+test('WRANGLER_JS: aponta para o node_modules do produto (não depende do diretório atual)', () => {
+  const raiz = fileURLToPath(new URL('..', import.meta.url));
+  assert.ok(WRANGLER_JS.startsWith(raiz), WRANGLER_JS);
+  assert.match(WRANGLER_JS.replaceAll('\\', '/'), /node_modules\/wrangler\/bin\/wrangler\.js$/);
+  assert.ok(existsSync(WRANGLER_JS), 'rode npm ci');
+});
+
+test('aplicarArquivo: valida banco, caminho e wrangler instalado; caminho com espaço sem aspas', async () => {
   const sp = () => filhoFalso(0);
   await assert.rejects(aplicarArquivo('x.sql', 'a;b', { spawn: sp }), /banco/);
   await assert.rejects(aplicarArquivo('x&y.sql', 'painel', { spawn: sp }), /Caminho/);
+  await assert.rejects(aplicarArquivo('x.sql', 'painel', { spawn: sp, wrangler: '/nao/existe/wrangler.js' }), /npm ci/);
   let args;
-  await aplicarArquivo('C:/minha pasta/x.sql', 'painel', { spawn: (c, a) => { args = a; return filhoFalso(0); }, plataforma: 'win32' });
-  assert.ok(args.includes('--file="C:/minha pasta/x.sql"'));
+  await aplicarArquivo('C:/minha pasta/x.sql', 'painel', { spawn: (c, a) => { args = a; return filhoFalso(0); } });
+  assert.ok(args.includes('--file=C:/minha pasta/x.sql'));
+});
+
+test('aplicarComRetentativa: 3 novas tentativas com 5 s, 15 s e 45 s', async () => {
+  const esperas = [];
+  let n = 0;
+  const aplicar = async () => { n++; if (n < 4) throw new Error(`falha ${n}`); };
+  await aplicarComRetentativa('x.sql', 'painel', { aplicar, esperar: async (ms) => { esperas.push(ms); }, log: () => {} });
+  assert.equal(n, 4);
+  assert.deepEqual(esperas, [5000, 15000, 45000]);
+
+  n = 0;
+  const sempre = async () => { n++; throw new Error('ETARGET'); };
+  await assert.rejects(aplicarComRetentativa('x.sql', 'painel', { aplicar: sempre, esperar: async () => {}, log: () => {} }), /ETARGET/);
+  assert.equal(n, 4);
+});
+
+test('aplicarComRetentativa: erro de validação não repete', async () => {
+  let n = 0;
+  const esperas = [];
+  await assert.rejects(
+    aplicarComRetentativa('x.sql', 'a;b', {
+      aplicar: (c, b) => { n++; return aplicarArquivo(c, b, { spawn: () => filhoFalso(0) }); },
+      esperar: async (ms) => { esperas.push(ms); },
+      log: () => {},
+    }),
+    /banco/,
+  );
+  assert.equal(n, 1);
+  assert.deepEqual(esperas, []);
+});
+
+test('criarD1Rest: erro de rede (fetch lança) também tenta de novo', async () => {
+  let n = 0;
+  const d1 = criarD1Rest({
+    ...opcoes,
+    fetch: async () => {
+      n++;
+      if (n < 3) throw new Error('getaddrinfo ENOTFOUND');
+      return resp(200, { success: true, result: [{ results: [{ ok: 1 }] }] });
+    },
+    esperar: async () => {},
+  });
+  assert.deepEqual(await d1.consulta('SELECT 1'), [{ ok: 1 }]);
+  assert.equal(n, 3);
+  let m = 0;
+  const sempre = criarD1Rest({ ...opcoes, fetch: async () => { m++; throw new Error('ECONNRESET'); }, esperar: async () => {} });
+  await assert.rejects(sempre.consulta('x'), (e) => {
+    assert.match(e.message, /ECONNRESET/);
+    assert.ok(!e.message.includes('SEGREDO123'));
+    return true;
+  });
+  assert.equal(m, 5);
 });
 
 test('upsertSql: limita o tamanho de cada instrucao', () => {

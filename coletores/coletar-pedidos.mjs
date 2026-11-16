@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { carregarConfig } from './config.mjs';
 import { chaveCliente, canalDe, linhasDoPedido } from './pedidos-regras.mjs';
-import { sqlValor, upsertSql, criarD1Rest, aplicarArquivo } from './d1.mjs';
+import { sqlValor, upsertSql, criarD1Rest, aplicarComRetentativa } from './d1.mjs';
 import { criarVtex } from './vtex.mjs';
 
 const DIA_MS = 86_400_000;
@@ -238,7 +238,7 @@ function criarAplicar(banco) {
     const caminho = join(pastaTemporaria(), `painel-${Date.now()}-${process.pid}.sql`);
     writeFileSync(caminho, sql, 'utf8');
     try {
-      await aplicarArquivo(caminho, banco);
+      await aplicarComRetentativa(caminho, banco);
     } finally {
       try { unlinkSync(caminho); } catch { /* arquivo já removido */ }
     }
