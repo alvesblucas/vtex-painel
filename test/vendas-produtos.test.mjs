@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { colunasProdutos, htmlDetalheCategoria, notaProdutos, soNaGeracao } from '../public/js/views/vendas.js';
+import { colunasProdutos, dicaCliqueQuebra, htmlDetalheCategoria, notaProdutos, soNaGeracao } from '../public/js/views/vendas.js';
 
 const chaves = (m, vv) => colunasProdutos(m, vv).map((c) => c.chave);
 
@@ -52,4 +52,15 @@ test('htmlDetalheCategoria: sem R$, sem comparação, carregando e lista vazia',
   const sem = htmlDetalheCategoria({ item: ITEM, subiram: null, caiu: null, vv: true, temCmp: false, rotuloCmp: 'x' });
   assert.ok(sem.includes('Escolha uma comparação na barra para ver o que subiu ou caiu.'));
   assert.ok(htmlDetalheCategoria({ item: ITEM, subiram: null, caiu: null, vv: true, temCmp: true, rotuloCmp: 'x' }).includes('Carregando'));
+});
+
+test('dicaCliqueQuebra: categoria abre detalhe, as outras filtram', () => {
+  assert.equal(dicaCliqueQuebra('categoria'), 'Ver produtos que subiram e caíram nesta categoria');
+  assert.equal(dicaCliqueQuebra('origem'), 'Filtrar por este item');
+});
+
+test('htmlDetalheCategoria: rótulos iguais aos do cartão de categoria', () => {
+  const h = htmlDetalheCategoria({ item: ITEM, subiram: [], caiu: [], vv: true, temCmp: true, rotuloCmp: 'x' });
+  assert.ok(h.includes('Pedidos com a categoria'));
+  assert.ok(h.includes('Faturamento dos itens, sem frete'));
 });

@@ -204,6 +204,7 @@ function pintarQuebra(raiz, el, por, d, medida, ctx) {
     rotulo: nomeMedida,
     rotuloRef: rotuloCmp(ctx.filtros),
     titulo: `${nomeMedida} por ${por}`,
+    dicaClique: dicaCliqueQuebra(por),
     aoClicar: (chave) => {
       if (chave === SEM_CHAVE) return;
       const item = por === 'categoria' ? (d.itens ?? []).find((i) => i.chave === chave) : null;
@@ -220,6 +221,9 @@ function pintarQuebra(raiz, el, por, d, medida, ctx) {
 
 // ---------- gaveta da categoria: produtos que subiram e caíram nela ----------
 
+// Dica do clique nas barras: categoria abre a gaveta; as demais filtram a página.
+export const dicaCliqueQuebra = (por) => (por === 'categoria' ? 'Ver produtos que subiram e caíram nesta categoria' : 'Filtrar por este item');
+
 const TOP_DETALHE = 5;
 
 function listaDetalhe(titulo, lista) {
@@ -232,7 +236,7 @@ function listaDetalhe(titulo, lista) {
 export function htmlDetalheCategoria({ item, subiram, caiu, vv, temCmp: comCmp, rotuloCmp: rotulo }) {
   const linha = (nome, atual, antes, fmt) => `<div class="detalhe-kpi"><span class="muted">${nome}</span>
     <strong>${fmt(atual)}</strong>${comCmp ? delta(atual, antes) : ''}</div>`;
-  const topo = `<div class="detalhe-topo">${linha('Pedidos', item.pedidos, item.cmpPedidos, int)}${vv ? linha('Faturamento', item.valor, item.cmpValor, brl) : ''}
+  const topo = `<div class="detalhe-topo">${linha('Pedidos com a categoria', item.pedidos, item.cmpPedidos, int)}${vv ? linha('Faturamento dos itens, sem frete', item.valor, item.cmpValor, brl) : ''}
     ${comCmp ? `<p class="muted detalhe-ref">vs ${esc(rotulo)}</p>` : ''}</div>`;
   const listas = comCmp
     ? `${listaDetalhe('Mais subiram', subiram)}${listaDetalhe('Mais caíram', caiu)}`
