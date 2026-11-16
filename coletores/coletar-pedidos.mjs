@@ -173,11 +173,14 @@ async function coletarDia(dia, deps) {
   return { pedidos: linhas.length, itens };
 }
 
+// quando/ok/erro = última tentativa; ultimo_ok = última coleta boa, que uma falha não apaga
+// (é dela que sai o "dados até").
 export async function registrarColeta(d1, { fonte, quando, ok, registros, erro }) {
   await d1.consulta(
-    'INSERT INTO coletas (fonte, quando, ok, registros, erro) VALUES (?, ?, ?, ?, ?) '
-      + 'ON CONFLICT(fonte) DO UPDATE SET quando=excluded.quando, ok=excluded.ok, registros=excluded.registros, erro=excluded.erro',
-    [fonte, quando, ok, registros, erro],
+    'INSERT INTO coletas (fonte, quando, ok, registros, erro, ultimo_ok) VALUES (?, ?, ?, ?, ?, ?) '
+      + 'ON CONFLICT(fonte) DO UPDATE SET quando=excluded.quando, ok=excluded.ok, registros=excluded.registros, '
+      + 'erro=excluded.erro, ultimo_ok=COALESCE(excluded.ultimo_ok, coletas.ultimo_ok)',
+    [fonte, quando, ok, registros, erro, ok ? quando : null],
   );
 }
 

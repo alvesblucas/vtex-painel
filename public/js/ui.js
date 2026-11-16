@@ -149,12 +149,16 @@ export function iniciais(nome, email) {
   return (letras(doNome.length ? doNome : doEmail) || '?').toUpperCase();
 }
 
-// "Dados até": dia (dd/mm, no fuso da loja) da coleta bem-sucedida mais antiga entre as fontes —
-// até ali todas as fontes estão completas. Sem coleta ok, ''. Mesmo dado do aviso de coleta (avisoDados).
+// Última coleta boa da fonte: a própria tentativa se deu certo; se falhou, ultimoOk (vem de /api/eu).
+const ultimaBoa = (c) => (c?.ok ? c.quando : c?.ultimoOk) ?? '';
+
+// "Dados até": dia e hora (dd/mm hh:mm, no fuso da loja) da última coleta boa mais antiga entre as
+// fontes — até ali todas estão completas. Uma falha não apaga a data. Sem coleta boa, ''.
+// Mesmo dado do aviso de coleta (avisoDados).
 export function dadosAte(coletas = [], fusoHoras = -3) {
-  const ms = (coletas ?? []).filter((c) => c?.ok).map((c) => Date.parse(c.quando ?? '')).filter(Number.isFinite);
+  const ms = (coletas ?? []).map((c) => Date.parse(ultimaBoa(c))).filter(Number.isFinite);
   if (!ms.length) return '';
-  return dm(new Date(Math.min(...ms) + fusoHoras * 3600000).toISOString());
+  return quando(new Date(Math.min(...ms)).toISOString(), fusoHoras);
 }
 
 // Aviso amarelo quando a fonte está atrasada em relação à agenda ({fonte: {horasMax}}) ou a última coleta falhou.
@@ -168,7 +172,9 @@ export function avisoDados(el, coletas = [], agenda = {}, { agora = Date.now(), 
     if (!c) {
       avisos.push(['aviso', 'sem coleta', `Coleta de ${fonte}: nenhuma coleta concluída`]);
     } else if (!c.ok) {
-      avisos.push(['erro', 'falhou', `Última coleta de ${fonte} falhou (${quando(c.quando, fusoHoras)}) — dados podem estar incompletos`]);
+      const boa = ultimaBoa(c);
+      const ate = boa ? `dados até ${quando(boa, fusoHoras)}` : 'nenhuma coleta concluída ainda';
+      avisos.push(['erro', 'falhou', `Última coleta de ${fonte} falhou às ${quando(c.quando, fusoHoras)}; ${ate}`]);
     } else if (Number.isFinite(horasMax) && horasMax > 0 && agora - Date.parse(c.quando) > horasMax * 3600000) {
       avisos.push(['aviso', 'atrasada', `Dados de ${fonte} até ${quando(c.quando, fusoHoras)} (${ha(c.quando)}; esperado a cada ${horasMax} h)`]);
     }

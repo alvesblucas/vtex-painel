@@ -56,6 +56,18 @@ test('avisoDados: cada aviso traz a pílula do estado', async () => {
   assert.equal(el.hidden, false);
 });
 
+test('avisoDados: falha diz até quando os dados valem', async () => {
+  const { avisoDados } = await import('../public/js/ui.js');
+  const el = { innerHTML: '', hidden: true };
+  const agora = Date.parse('2026-11-16T12:00:00Z');
+  avisoDados(el, [
+    { fonte: 'pedidos', ok: false, quando: '2026-11-16T03:45:00Z', ultimoOk: '2026-11-15T15:40:00Z' },
+    { fonte: 'estoque', ok: false, quando: '2026-11-16T03:45:00Z', ultimoOk: null },
+  ], {}, { agora });
+  assert.match(el.innerHTML, /Última coleta de pedidos falhou às 16\/11 00:45; dados até 15\/11 12:40/);
+  assert.match(el.innerHTML, /Última coleta de estoque falhou às 16\/11 00:45; nenhuma coleta concluída ainda/);
+});
+
 test('CSV: ;, BOM, CRLF, centavos com vírgula, aspas escapadas', () => {
   const colunas = [
     { chave: 'nome', titulo: 'Produto' },
@@ -224,14 +236,17 @@ test('iniciais: do nome (primeira e última palavra) ou do e-mail', () => {
   assert.equal(iniciais('', ''), '?');
 });
 
-test('dadosAte: dia (dd/mm, fuso da loja) da coleta ok mais antiga entre as fontes', () => {
+test('dadosAte: dia e hora (fuso da loja) da última coleta boa mais antiga entre as fontes', () => {
   const coletas = [
     { fonte: 'pedidos', quando: '2026-11-14T02:30:00Z', ok: 1 }, // 13/11 23:30 em UTC−3
     { fonte: 'clientes', quando: '2026-11-14T12:00:00Z', ok: 1 },
-    { fonte: 'estoque', quando: '2026-11-10T12:00:00Z', ok: 0 }, // falha: não define a data
+    { fonte: 'estoque', quando: '2026-11-10T12:00:00Z', ok: 0 }, // falha sem coleta boa: não define a data
   ];
-  assert.equal(dadosAte(coletas, -3), '13/11');
-  assert.equal(dadosAte(coletas, 0), '14/11');
+  assert.equal(dadosAte(coletas, -3), '13/11 23:30');
+  assert.equal(dadosAte(coletas, 0), '14/11 02:30');
+  // última tentativa falhou: vale a última coleta boa (ultimoOk), não some
+  const falhou = [{ fonte: 'pedidos', quando: '2026-11-16T03:45:00Z', ok: false, ultimoOk: '2026-11-15T15:40:00Z' }];
+  assert.equal(dadosAte(falhou, -3), '15/11 12:40');
   assert.equal(dadosAte([{ fonte: 'pedidos', quando: '2026-11-14T02:30:00Z', ok: 0 }]), '');
   assert.equal(dadosAte([{ fonte: 'pedidos', quando: 'lixo', ok: 1 }]), '');
   assert.equal(dadosAte([]), '');

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { criarVtex } from '../coletores/vtex.mjs';
 import {
-  diasDaJanela, mesesPendentes, diasDoMes, hojeLocal, coletarDias, limparErro,
+  diasDaJanela, mesesPendentes, diasDoMes, hojeLocal, coletarDias, limparErro, registrarColeta,
 } from '../coletores/coletar-pedidos.mjs';
 import { criarD1Falso } from './d1-falso.mjs';
 
@@ -273,4 +273,22 @@ test('criarVtex: valida chaves', () => {
   assert.throws(() => criarVtex({ conta: 'minhaloja', appKey: 'com espaço', appToken: 't' }), /VTEX_APP_KEY/);
   assert.throws(() => criarVtex({ conta: 'minhaloja', appKey: 'k', appToken: '' }), /VTEX_APP_TOKEN/);
   assert.throws(() => criarVtex({ conta: 'minha loja', appKey: 'k', appToken: 't' }), /VTEX_CONTA/);
+});
+
+test('registrarColeta: falha guarda a tentativa e mantém a última coleta boa (ultimo_ok)', async () => {
+  const { db, deps } = await montar(vtexFalso([]));
+  const linha = () => db.prepare("SELECT quando, ok, erro, ultimo_ok FROM coletas WHERE fonte = 'pedidos'").first();
+  await registrarColeta(deps.d1, { fonte: 'pedidos', quando: '2026-11-15T15:40:00.000Z', ok: 1, registros: 10, erro: null });
+  assert.equal((await linha()).ultimo_ok, '2026-11-15T15:40:00.000Z');
+  await registrarColeta(deps.d1, { fonte: 'pedidos', quando: '2026-11-16T03:45:00.000Z', ok: 0, registros: 0, erro: 'ETARGET' });
+  assert.deepEqual({ ...(await linha()) }, {
+    quando: '2026-11-16T03:45:00.000Z', ok: 0, erro: 'ETARGET', ultimo_ok: '2026-11-15T15:40:00.000Z',
+  });
+  await registrarColeta(deps.d1, { fonte: 'pedidos', quando: '2026-11-16T15:40:00.000Z', ok: 1, registros: 12, erro: null });
+  assert.deepEqual({ ...(await linha()) }, {
+    quando: '2026-11-16T15:40:00.000Z', ok: 1, erro: null, ultimo_ok: '2026-11-16T15:40:00.000Z',
+  });
+  // primeira coleta da fonte já falhando: sem ultimo_ok
+  await registrarColeta(deps.d1, { fonte: 'estoque', quando: '2026-11-16T03:45:00.000Z', ok: 0, registros: 0, erro: 'x' });
+  assert.equal((await db.prepare("SELECT ultimo_ok FROM coletas WHERE fonte = 'estoque'").first()).ultimo_ok, null);
 });

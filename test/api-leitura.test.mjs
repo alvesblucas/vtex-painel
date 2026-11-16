@@ -12,6 +12,7 @@ import * as produtos from '../functions/api/vendas/produtos.js';
 import * as clientes from '../functions/api/clientes.js';
 import * as visao from '../functions/api/visao.js';
 import { criarD1Falso } from './d1-falso.mjs';
+import { registrarColeta } from '../coletores/coletar-pedidos.mjs';
 
 // ---------- fixture fictícia (centavos distintos, impossíveis de confundir com contagens) ----------
 
@@ -484,7 +485,7 @@ test('eu: dados do usuário, loja e coletas', async () => {
   assert.equal(corpo.superAdmin, false);
   assert.ok(corpo.abas.includes('vendas'));
   assert.deepEqual(corpo.loja, { nome: 'Minha Loja' });
-  assert.deepEqual(corpo.coletas, [{ fonte: 'pedidos', quando: '2026-03-08T03:00:00.000Z', ok: true }]);
+  assert.deepEqual(corpo.coletas, [{ fonte: 'pedidos', quando: '2026-03-08T03:00:00.000Z', ok: true, ultimoOk: '2026-03-08T03:00:00.000Z' }]);
   assert.equal(corpo.fusoHoras, -3);
   assert.deepEqual(corpo.agenda, {});
   const padrao = await pedir(db, '/api/eu', eu, { email: 'fora@exemplo.com' });
@@ -493,6 +494,27 @@ test('eu: dados do usuário, loja e coletas', async () => {
   assert.deepEqual(padrao.corpo.loja, { nome: 'Painel' });
   assert.deepEqual(padrao.corpo.coletas, []);
   assert.equal(padrao.corpo.fusoHoras, -3);
+});
+
+test('coleta ok → coleta falha: /api/eu, dadosAte e a visão mantêm a última coleta boa', async () => {
+  const db = await banco();
+  const d1 = { consulta: (s, p = []) => db.prepare(s).bind(...p).all().then((r) => r.results) };
+  const boa = new Date(Date.now() - 2 * 3600000).toISOString();
+  const falha = new Date(Date.now() - 600000).toISOString();
+  await registrarColeta(d1, { fonte: 'pedidos', quando: boa, ok: 1, registros: 10, erro: null });
+  await registrarColeta(d1, { fonte: 'pedidos', quando: falha, ok: 0, registros: 0, erro: 'ETARGET' });
+  const { corpo } = await pedir(db, '/api/eu', eu);
+  assert.deepEqual(corpo.coletas, [{ fonte: 'pedidos', quando: falha, ok: false, ultimoOk: boa }]);
+  assert.equal(await dadosAte(db, 'pedidos'), boa);
+  const r = await pedir(db, `/api/vendas/resumo?${PERIODO}`, resumo);
+  assert.equal(r.corpo.dadosAte, boa);
+  // dentro do prazo da agenda: sem "nenhuma coleta concluída" nem atraso
+  const env = { AGENDA_JSON: JSON.stringify({ pedidos: { horasMax: 3 } }) };
+  const v = await pedir(db, '/api/visao', visao, { env });
+  assert.ok(!v.corpo.alertas.some((a) => a.aba === 'visao'), JSON.stringify(v.corpo.alertas));
+  // passou do prazo: atraso conta a partir da última coleta boa
+  const v2 = await pedir(db, '/api/visao', visao, { env: { AGENDA_JSON: JSON.stringify({ pedidos: { horasMax: 1 } }) } });
+  assert.match(v2.corpo.alertas.find((a) => a.aba === 'visao').texto, /atrasada: última há 2 h/);
 });
 
 test('eu: agenda e fuso vêm do ambiente (R16); inválidos caem no padrão; inativo não recebe agenda', async () => {
