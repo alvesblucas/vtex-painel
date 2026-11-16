@@ -1,5 +1,10 @@
 import { ErroHttp } from './resposta.js';
 
+export const CANAL_SITE = 'Site';
+// Origem efetiva: no site, a origem do pedido (UTM etc.); fora dele, o nome do canal (cada marketplace separado).
+// Calculada na consulta: não regrava o histórico.
+export const ORIGEM_SQL = `(CASE WHEN p.canal = '${CANAL_SITE}' THEN p.origem ELSE p.canal END)`;
+
 export const LISTAS = ['origem', 'categoria', 'marca', 'pagamento', 'uf', 'cidade', 'entrega'];
 
 const MAX_DIAS = 731;
@@ -95,7 +100,7 @@ export function wherePedidos(f, periodo, { cancelado = 0, itens = true } = {}) {
   if (cancelado === 0 || cancelado === 1) sql.unshift(`p.cancelado = ${cancelado}`);
   for (const l of ['origem', 'pagamento', 'uf', 'cidade', 'entrega']) {
     if (!f[l].length) continue;
-    const c = em(`p.${l}`, f[l]);
+    const c = em(l === 'origem' ? ORIGEM_SQL : `p.${l}`, f[l]);
     sql.push(c.sql);
     params.push(...c.params);
   }

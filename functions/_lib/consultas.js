@@ -1,10 +1,9 @@
 // Consultas de leitura reaproveitadas pelos handlers. Todo valor vai por `?`; cada consulta aplica os filtros uma vez.
-import { lerFiltros, periodoComparacao, somarDias, usaItens, whereItens, wherePedidos } from './filtros.js';
+import { CANAL_SITE, lerFiltros, ORIGEM_SQL, periodoComparacao, somarDias, usaItens, whereItens, wherePedidos } from './filtros.js';
 import { ErroHttp } from './resposta.js';
 
 const HORA_MS = 3600000;
 const FUSO_PADRAO = -3;
-const CANAL_SITE = 'Site';
 const SEM_CHAVE = '(não informado)';
 
 // Fuso da loja em horas (env.FUSO_HORAS); vazio ou inválido = -3.
@@ -94,7 +93,7 @@ export async function serie(db, f, periodo) {
 }
 
 export const QUEBRAS = {
-  origem: 'p.origem', categoria: 'i.categoria', marca: 'i.marca', pagamento: 'p.pagamento', uf: 'p.uf', entrega: 'p.entrega',
+  origem: ORIGEM_SQL, categoria: 'i.categoria', marca: 'i.marca', pagamento: 'p.pagamento', uf: 'p.uf', entrega: 'p.entrega',
 };
 
 // Todos os grupos, sem ordem; quem chama ordena e corta o top N.
@@ -221,7 +220,7 @@ export async function opcoes(db, desde) {
   for (const { uf, cidade } of pares) (cidades[uf] ??= []).push(cidade);
   for (const uf of Object.keys(cidades)) cidades[uf].sort(ordenar);
   return {
-    origens: await distintos('p.origem'),
+    origens: await distintos(ORIGEM_SQL),
     pagamentos: await distintos('p.pagamento'),
     entregas: await distintos('p.entrega'),
     ufs: await distintos('p.uf'),

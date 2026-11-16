@@ -155,8 +155,8 @@ test('resumo com marca=A: soma dos itens da marca (sem frete) e porItens', async
   assert.equal(corpo.atual.pedidos, comA.length);
   assert.equal(corpo.atual.cancelados, 1);
   // combinação com filtro de pedido
-  const r2 = await pedir(db, `/api/vendas/resumo?${PERIODO}&marca=A&origem=Marketplace`, resumo);
-  const mk = comA.filter((p) => p.origem === 'Marketplace');
+  const r2 = await pedir(db, `/api/vendas/resumo?${PERIODO}&marca=A&origem=Canal%202`, resumo);
+  const mk = comA.filter((p) => p.canal === 'Canal 2');
   assert.equal(r2.corpo.atual.pedidos, mk.length);
   assert.equal(r2.corpo.atual.valor, soma(mk, (p) => soma(p.itens.filter((i) => i.marca === 'A'), (i) => i.valor)));
 });
@@ -225,8 +225,9 @@ test('quebra por origem: ordena por valor', async () => {
   const { status, corpo } = await pedir(db, `/api/vendas/quebra?${PERIODO}&por=origem`, quebra);
   assert.equal(status, 200);
   assert.equal(corpo.por, 'origem');
-  const esperado = ['Google Ads', 'Sem UTM', 'Marketplace']
-    .map((o) => ({ chave: o, valor: soma(MARCO_OK.filter((p) => p.origem === o), (p) => p.valor), pedidos: MARCO_OK.filter((p) => p.origem === o).length }))
+  const ef = (p) => (p.canal === 'Site' ? p.origem : p.canal);
+  const esperado = ['Google Ads', 'Sem UTM', 'Canal 2']
+    .map((o) => ({ chave: o, valor: soma(MARCO_OK.filter((p) => ef(p) === o), (p) => p.valor), pedidos: MARCO_OK.filter((p) => ef(p) === o).length }))
     .sort((a, b) => b.valor - a.valor);
   assert.deepEqual(corpo.itens.map(({ chave, valor, pedidos }) => ({ chave, valor, pedidos })), esperado);
   const ga = corpo.itens.find((i) => i.chave === 'Google Ads');
@@ -262,6 +263,38 @@ test('quebra: por inválido → 400', async () => {
   const r = await pedir(db, `/api/vendas/quebra?${PERIODO}&por=cpf`, quebra);
   assert.equal(r.status, 400);
   assert.equal((await pedir(db, `/api/vendas/quebra?${PERIODO}`, quebra)).status, 400);
+});
+
+// ---------- origem efetiva (marketplace pelo nome do canal) ----------
+
+test('origem efetiva: marketplace aparece pelo nome do canal', async () => {
+  const db = await banco();
+  const q = await pedir(db, `/api/vendas/quebra?${PERIODO}&por=origem`, quebra);
+  const chaves = q.corpo.itens.map((i) => i.chave);
+  assert.ok(chaves.includes('Canal 2'));
+  assert.ok(!chaves.includes('Marketplace'));
+  const op = await pedir(db, '/api/opcoes', opcoes);
+  assert.ok(op.corpo.origens.includes('Canal 2'));
+  assert.ok(!op.corpo.origens.includes('Marketplace'));
+});
+
+test('filtro origem=<canal> traz só aquele canal, e soma com origem do site', async () => {
+  const db = await banco();
+  const so = await pedir(db, `/api/vendas/resumo?${PERIODO}&origem=Canal%202`, resumo);
+  const mk = MARCO_OK.filter((p) => p.canal === 'Canal 2');
+  assert.equal(so.corpo.atual.pedidos, mk.length);
+  const ambos = await pedir(db, `/api/vendas/resumo?${PERIODO}&origem=Canal%202&origem=Sem%20UTM`, resumo);
+  assert.equal(ambos.corpo.atual.pedidos, mk.length + MARCO_OK.filter((p) => p.origem === 'Sem UTM').length);
+});
+
+test('pedido de canal com origem gravada de site conta pelo canal', async () => {
+  const db = await banco();
+  const p = { ...linha(['m99', '2026-03-04', 'Google Ads', 'pix', 'SP', 'Campinas', 'entrega', null, 0, [A1(1, 12345)]]), canal: 'Canal 3' };
+  await inserirPedidos(db, [p]);
+  const q = await pedir(db, `/api/vendas/quebra?${PERIODO}&por=origem`, quebra);
+  assert.ok(q.corpo.itens.some((i) => i.chave === 'Canal 3'));
+  const ga = q.corpo.itens.find((i) => i.chave === 'Google Ads');
+  assert.equal(ga.pedidos, MARCO_OK.filter((x) => x.origem === 'Google Ads').length);
 });
 
 // ---------- /api/vendas/produtos ----------
