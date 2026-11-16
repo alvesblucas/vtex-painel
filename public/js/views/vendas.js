@@ -4,6 +4,7 @@ import { LISTAS } from '../estado.js';
 import { barras, linha } from '../graficos.js';
 import { brl, brlEixo, brlK, CSV_MAX_SERVIDOR, delta, deltaPct, dm, dma, erroCartao, esc, int, semana, tabela } from '../ui.js';
 import { bloco, cartoesEsqueleto, estrutura, pintarFileira, rotuloCmp, semDados, temCmp } from './comum.js';
+import { gavetaLeitura } from './modal.js';
 
 const SEM_CHAVE = '(não informado)';
 const QUEBRAS = [
@@ -204,7 +205,10 @@ function pintarQuebra(raiz, el, por, d, medida, ctx) {
     rotuloRef: rotuloCmp(ctx.filtros),
     titulo: `${nomeMedida} por ${por}`,
     aoClicar: (chave) => {
-      if (chave !== SEM_CHAVE) ctx.aplicarFiltro(por, chave);
+      if (chave === SEM_CHAVE) return;
+      const item = por === 'categoria' ? (d.itens ?? []).find((i) => i.chave === chave) : null;
+      if (item) detalheCategoria(ctx, item, document.activeElement);
+      else ctx.aplicarFiltro(por, chave);
     },
   });
   const outros = emR ? d.outros?.valor : d.outros?.pedidos;
@@ -212,6 +216,56 @@ function pintarQuebra(raiz, el, por, d, medida, ctx) {
   if (outros) pe.push(`Outros: ${emR ? brlK(outros) : int(outros)}`);
   if (deItens && !emR) pe.push(`um pedido pode estar em mais de uma ${por}`);
   raiz.querySelector(`[data-pe="${por}"]`).textContent = pe.join(' · ');
+}
+
+// ---------- gaveta da categoria: produtos que subiram e caíram nela ----------
+
+const TOP_DETALHE = 5;
+
+function listaDetalhe(titulo, lista) {
+  if (!lista) return `<section class="detalhe-bloco"><h3>${titulo}</h3><p class="muted">Carregando…</p></section>`;
+  const linhas = lista.slice(0, TOP_DETALHE).map((p) => `<li><span class="detalhe-nome">${esc(p.nome ?? p.sku)}</span>${deltaPct(p.varQtd)}</li>`);
+  return `<section class="detalhe-bloco"><h3>${titulo}</h3>${linhas.length ? `<ol class="detalhe-lista">${linhas.join('')}</ol>` : '<p class="muted">Nenhum produto com variação.</p>'}</section>`;
+}
+
+// HTML do corpo da gaveta; `subiram`/`caiu` null = carregando. Números do topo vêm da própria barra clicada.
+export function htmlDetalheCategoria({ item, subiram, caiu, vv, temCmp: comCmp, rotuloCmp: rotulo }) {
+  const linha = (nome, atual, antes, fmt) => `<div class="detalhe-kpi"><span class="muted">${nome}</span>
+    <strong>${fmt(atual)}</strong>${comCmp ? delta(atual, antes) : ''}</div>`;
+  const topo = `<div class="detalhe-topo">${linha('Pedidos', item.pedidos, item.cmpPedidos, int)}${vv ? linha('Faturamento', item.valor, item.cmpValor, brl) : ''}
+    ${comCmp ? `<p class="muted detalhe-ref">vs ${esc(rotulo)}</p>` : ''}</div>`;
+  const listas = comCmp
+    ? `${listaDetalhe('Mais subiram', subiram)}${listaDetalhe('Mais caíram', caiu)}`
+    : `<p class="muted">${esc(SEM_CMP_PRODUTOS)}</p>`;
+  return `${topo}${listas}<button type="button" class="btn primario" data-filtrar>Filtrar a página por esta categoria</button>`;
+}
+
+async function detalheCategoria(ctx, item, gatilho) {
+  if (!ctx.vivo()) return; // barra de uma renderização já trocada
+  const vv = Boolean(ctx.eu.verValores);
+  const comCmp = temCmp(ctx.filtros);
+  const base = { item, vv, temCmp: comCmp, rotuloCmp: rotuloCmp(ctx.filtros) };
+  const g = gavetaLeitura({ titulo: item.chave, gatilho, signal: ctx.signal, html: htmlDetalheCategoria({ ...base, subiram: null, caiu: null }) });
+  const ligar = () => {
+    g.corpo.querySelector('[data-filtrar]').addEventListener('click', () => {
+      g.fechar(false);
+      ctx.aplicarFiltro('categoria', item.chave);
+    });
+  };
+  ligar();
+  if (!comCmp) return;
+  const filtros = { ...ctx.filtros, categoria: [item.chave] };
+  const buscar = (modo) => ctx.api(`/api/vendas/produtos?${new URLSearchParams({ modo, pagina: '1' })}`, filtros);
+  try {
+    const [subiram, caiu] = await Promise.all([buscar('subiram'), buscar('caiu')]);
+    if (!g.aberta() || !ctx.vivo()) return;
+    g.corpo.innerHTML = htmlDetalheCategoria({ ...base, subiram: subiram.itens, caiu: caiu.itens });
+    ligar();
+  } catch (e) {
+    if (e?.name === 'AbortError' || !g.aberta() || !ctx.vivo()) return;
+    g.corpo.querySelectorAll('.detalhe-bloco').forEach((s) => s.remove());
+    g.corpo.insertAdjacentHTML('afterbegin', `<p class="gaveta-erro" role="alert">${esc(e?.mensagem || 'Não foi possível carregar os produtos.')}</p>`);
+  }
 }
 
 // ---------- produtos (paginação no servidor) ----------

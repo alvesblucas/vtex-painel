@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { colunasProdutos, notaProdutos, soNaGeracao } from '../public/js/views/vendas.js';
+import { colunasProdutos, htmlDetalheCategoria, notaProdutos, soNaGeracao } from '../public/js/views/vendas.js';
 
 const chaves = (m, vv) => colunasProdutos(m, vv).map((c) => c.chave);
 
@@ -33,4 +33,23 @@ test('notaProdutos: só nos modos novos e nunca junto do aviso de sem comparaç�
   assert.equal(notaProdutos('mais', false), '');
   assert.equal(notaProdutos('caiu', false), 'Só entram produtos com 3+ pedidos no período de comparação.');
   assert.equal(notaProdutos('subiram', true), '');
+});
+
+const ITEM = { chave: '<b>"Cur"</b>', pedidos: 12, cmpPedidos: 10, valor: 50000, cmpValor: 40000 };
+const P = (n, v) => ({ nome: `P${n}`, sku: String(n), varQtd: v });
+
+test('htmlDetalheCategoria: top 5, escapa e mostra variação', () => {
+  const h = htmlDetalheCategoria({ item: ITEM, subiram: [1, 2, 3, 4, 5, 6].map((n) => P(n, 10 * n)), caiu: [P(9, -50), { nome: '<img src=x>', sku: '77', varQtd: -10 }], vv: true, temCmp: true, rotuloCmp: 'Período anterior' });
+  assert.ok(!h.includes('<img src=x>') && h.includes('&lt;img src=x&gt;'));
+  assert.ok(h.includes('P5') && !h.includes('P6'));
+  assert.ok(h.includes('P9') && h.includes('Filtrar a página por esta categoria'));
+  assert.ok(h.includes('R$'));
+});
+
+test('htmlDetalheCategoria: sem R$, sem comparação, carregando e lista vazia', () => {
+  assert.ok(!htmlDetalheCategoria({ item: ITEM, subiram: [], caiu: [], vv: false, temCmp: true, rotuloCmp: 'x' }).includes('R$'));
+  assert.ok(htmlDetalheCategoria({ item: ITEM, subiram: [], caiu: [], vv: true, temCmp: true, rotuloCmp: 'x' }).includes('Nenhum produto com variação.'));
+  const sem = htmlDetalheCategoria({ item: ITEM, subiram: null, caiu: null, vv: true, temCmp: false, rotuloCmp: 'x' });
+  assert.ok(sem.includes('Escolha uma comparação na barra para ver o que subiu ou caiu.'));
+  assert.ok(htmlDetalheCategoria({ item: ITEM, subiram: null, caiu: null, vv: true, temCmp: true, rotuloCmp: 'x' }).includes('Carregando'));
 });

@@ -659,6 +659,16 @@ td.resumo { color: var(--text-2); min-width: 240px; }
 .gaveta-corpo { flex: 1; overflow-y: auto; padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 18px; margin: 0; }
 .gaveta-erro { color: var(--bad); font-size: 13px; padding: 10px 24px; border-top: 1px solid var(--rule); border-left: 2px solid var(--bad); background: rgba(248, 113, 113, .06); }
 .gaveta-erro:empty { display: none; }
+/* gaveta da categoria (aba Vendas) */
+.detalhe-topo { display: flex; flex-wrap: wrap; gap: 10px 24px; }
+.detalhe-kpi { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.detalhe-kpi strong { font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.detalhe-ref { flex-basis: 100%; margin: 0; font-size: 12px; }
+.detalhe-bloco h3 { margin: 0 0 8px; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.detalhe-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.detalhe-lista li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 13px; }
+.detalhe-nome { min-width: 0; overflow-wrap: anywhere; }
+.gaveta-corpo > .btn { align-self: flex-start; }
 .gaveta-pe { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 24px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule); }
 .campo { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; line-height: 16px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .campo .muted { letter-spacing: 0; text-transform: none; }

@@ -3,6 +3,7 @@
 import { ROTULOS_ABAS } from '../estado.js';
 import { erroCartao, esc, pill, quando, tabela } from '../ui.js';
 import { estrutura } from './comum.js';
+import { abrirModal } from './modal.js';
 
 const ABAS = Object.keys(ROTULOS_ABAS);
 const SO_SUPER = 'Só o administrador principal pode alterar';
@@ -18,10 +19,8 @@ const INTERNAS = [
   ['historico', 'Histórico'],
 ];
 const ESQUELETO = '<div class="esqueleto" aria-label="Carregando"><span></span><span></span><span></span></div>';
-const FOCAVEIS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 let abaInterna = 'pessoas';
-const pilhaModais = []; // o Esc e o Tab valem só para o modal de cima
 
 const simNao = (v) => (v ? 'sim' : 'não');
 const rotuloAba = (a) => ROTULOS_ABAS[a] ?? a;
@@ -247,49 +246,6 @@ function celulaAcao(st, u, td) {
 
 // ---------- modais (painel lateral e confirmação) ----------
 
-function abrirModal(caixa, { aoEsc, voltar = null }) {
-  const anterior = voltar ?? document.activeElement;
-  const inertes = [...document.body.children].filter((c) => c !== caixa && !c.inert);
-  inertes.forEach((c) => {
-    c.inert = true;
-  });
-  document.body.append(caixa);
-  pilhaModais.push(caixa);
-  const tecla = (ev) => {
-    if (pilhaModais[pilhaModais.length - 1] !== caixa) return;
-    if (ev.key === 'Escape') {
-      ev.preventDefault();
-      ev.stopPropagation();
-      aoEsc();
-      return;
-    }
-    if (ev.key !== 'Tab') return;
-    const f = [...caixa.querySelectorAll(FOCAVEIS)].filter((e) => e.getClientRects().length);
-    if (!f.length) return;
-    const [primeiro, ultimo] = [f[0], f[f.length - 1]];
-    if (!caixa.contains(document.activeElement)) {
-      ev.preventDefault();
-      primeiro.focus();
-    } else if (ev.shiftKey && document.activeElement === primeiro) {
-      ev.preventDefault();
-      ultimo.focus();
-    } else if (!ev.shiftKey && document.activeElement === ultimo) {
-      ev.preventDefault();
-      primeiro.focus();
-    }
-  };
-  // No documento: mesmo com o foco perdido (ex.: botão desabilitado durante o envio), Esc e Tab continuam presos aqui.
-  document.addEventListener('keydown', tecla);
-  return function fechar(devolverFoco = true) {
-    document.removeEventListener('keydown', tecla);
-    pilhaModais.splice(pilhaModais.indexOf(caixa), 1);
-    caixa.remove();
-    inertes.forEach((c) => {
-      c.inert = false;
-    });
-    if (devolverFoco && anterior?.isConnected) anterior.focus();
-  };
-}
 
 /** Diálogo de confirmação dentro do app. Resolve true (confirmou) ou false. */
 export function confirmar({ titulo, texto, botao = 'Confirmar', perigo = false }) {
