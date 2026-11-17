@@ -453,6 +453,16 @@ button.barra-linha:hover .barra { filter: brightness(1.15); }
 .barra { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 0 2px 2px 0; min-width: 2px; transform-origin: left; }
 .marco { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1.5px; border-radius: 1px; background: var(--serie-ref); box-shadow: 0 0 0 2px var(--surface); }
 .barra-valor { font: 12.5px var(--sans); font-variant-numeric: tabular-nums; color: var(--text); min-width: 64px; text-align: right; }
+/* Novos x recorrentes em número: um ponto na cor da legenda antes de cada contagem. */
+.barra-nr { display: inline-flex; justify-content: flex-end; gap: 12px; white-space: nowrap; }
+.nr { display: inline-flex; align-items: center; gap: 5px; }
+/* largura fixa por coluna: os pontos e os números ficam alinhados de uma linha para outra */
+.nr-novo { min-width: 92px; }
+.nr-rec { min-width: 128px; }
+.nr::before { content: ''; width: 7px; height: 7px; border-radius: 1px; flex: none; }
+.nr-novo::before { background: var(--cat-novo); }
+.nr-rec::before { background: var(--cat-rec); }
+.nr-txt { color: var(--text-2); }
 
 /* ---------- responsivo ---------- */
 @media (max-width: 1000px) {
@@ -491,6 +501,9 @@ button.barra-linha:hover .barra { filter: brightness(1.15); }
   }
   .opcoes-lista { max-height: 45vh; }
   .barra-linha { grid-template-columns: minmax(70px, 34%) minmax(0, 1fr) auto; gap: 8px; }
+  .nr-txt { display: none; } /* no celular ficam só os números; a legenda do bloco diz as cores */
+  .barra-nr { gap: 8px; }
+  .nr-novo, .nr-rec { min-width: 46px; }
   .card { padding: 16px; }
   .cartao-valor { font-size: 24px; line-height: 30px; }
 }
