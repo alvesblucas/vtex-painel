@@ -13,6 +13,7 @@ import * as clientes from '../functions/api/clientes.js';
 import * as visao from '../functions/api/visao.js';
 import { criarD1Falso } from './d1-falso.mjs';
 import { registrarColeta } from '../coletores/coletar-pedidos.mjs';
+import { sqlAtualizarOpcoes } from '../functions/_lib/opcoes-sql.js';
 
 // ---------- fixture fictícia (centavos distintos, impossíveis de confundir com contagens) ----------
 
@@ -74,6 +75,9 @@ async function inserirPedidos(db, lista) {
       p.valor, p.frete, 0, p.canal, p.origem, p.pagamento, p.uf, p.cidade, p.entrega, p.tipo, '2026-03-08T00:00:00Z').run();
     for (const i of p.itens) await db.prepare(ii).bind(p.id, i.sku, i.nome, i.marca, i.categoria, i.qtd, i.valor).run();
   }
+  // como o coletor: atualiza as opções da barra só nos dias gravados
+  const dias = lista.map((p) => p.dia).sort();
+  if (dias.length) db.exec(sqlAtualizarOpcoes(dias[0], dias.at(-1)));
 }
 
 async function banco() {
@@ -580,6 +584,29 @@ test('opções: listas distintas ordenadas, cidades por UF, últimos 400 dias, p
   const nada = await pedir(db, '/api/opcoes', opcoes, { email: 'nada@exemplo.com' });
   assert.equal(nada.status, 403);
   assert.equal(nada.corpo.erro, 'sem-permissao');
+});
+
+test('opções: atualizar uma janela antiga não recua o último dia nem apaga valores', async () => {
+  const db = await banco();
+  const ontem = new Date(Date.parse(`${hojeLocal({})}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+  await inserirPedidos(db, [linha(['r2', ontem, 'E-mail', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 1000, [A1(1, 30017)]])]);
+  db.exec(sqlAtualizarOpcoes('2026-03-01', '2026-03-07'));
+  const r = await db.prepare("SELECT ultimo_dia FROM opcoes WHERE lista = 'origem' AND valor = 'E-mail'").first();
+  assert.equal(r.ultimo_dia, ontem);
+  const a = await db.prepare("SELECT ultimo_dia FROM opcoes WHERE lista = 'marca' AND valor = 'A'").first();
+  assert.equal(a.ultimo_dia, ontem);
+  db.exec(sqlAtualizarOpcoes('2026-03-01', '2026-03-07'));
+  const n = (await db.prepare('SELECT COUNT(*) AS n FROM opcoes').first()).n;
+  db.exec(sqlAtualizarOpcoes('2026-03-01', '2026-03-07'));
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM opcoes').first()).n, n, 'idempotente');
+});
+
+test('opções: a API lê a tabela pronta, não os pedidos', async () => {
+  const db = await banco();
+  await db.prepare("INSERT INTO opcoes (lista, uf, valor, ultimo_dia) VALUES ('marca', '', 'Só na tabela', '2099-01-01')").run();
+  const { corpo } = await pedir(db, '/api/opcoes', opcoes);
+  assert.ok(corpo.marcas.includes('Só na tabela'));
+  assert.throws(() => sqlAtualizarOpcoes("2026-01-01' OR 1=1 --", '2026-01-02'), /Período inválido/);
 });
 
 test('eu: dados do usuário, loja e coletas', async () => {
