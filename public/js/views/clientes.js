@@ -82,7 +82,7 @@ function pintarOrigens(el, origens, ctx) {
       <span class="barra-nome">${esc(o.origem)}</span>
       <span class="barra-trilho"><span class="pilha" style="width:${larg(tot)}">
         <span class="seg-novo" style="flex-grow:${o.novo}"></span><span class="seg-rec" style="flex-grow:${o.recorrente}"></span></span></span>
-      <span class="barra-valor num">${num1(pct)}% <span class="muted">de ${int(tot)}</span></span>
+      <span class="barra-valor num barra-nr"><span class="nr nr-novo">${int(o.novo)}<span class="nr-txt"> novos</span></span><span class="nr nr-rec">${int(o.recorrente)}<span class="nr-txt"> recorrentes</span></span></span>
     </button>`;
   }).join('')}</div>`;
   el.querySelectorAll('[data-origem]').forEach((botao) => {
