@@ -16,7 +16,7 @@ const usuario = (extra = {}) => ({ email: 'ana@exemplo.com', nome: 'Ana', perfil
 beforeEach(() => limparCacheUsuarios());
 
 test('CAMPOS_VALOR', () => {
-  assert.deepEqual(CAMPOS_VALOR, ['valor', 'ticket', 'frete', 'desconto', 'preco', 'valorCmp', 'ticketCmp', 'cmpValor']);
+  assert.deepEqual(CAMPOS_VALOR, ['valor', 'ticket', 'frete', 'desconto', 'preco', 'valorCmp', 'ticketCmp', 'cmpValor', 'varPreco']);
 });
 
 test('perfil sem ajustes', () => {

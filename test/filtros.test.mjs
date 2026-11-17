@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lerFiltros, MAX_VALORES_TOTAL, periodoComparacao, wherePedidos, whereItens, usaItens, LISTAS } from '../functions/_lib/filtros.js';
+import { lerFiltros, MAX_VALORES_TOTAL, ORIGEM_SQL, periodoComparacao, wherePedidos, whereItens, usaItens, LISTAS } from '../functions/_lib/filtros.js';
 import { ErroHttp, erro, json } from '../functions/_lib/resposta.js';
 import { criarD1Falso } from './d1-falso.mjs';
 
@@ -67,7 +67,9 @@ test('injeção fica só em params', () => {
   const f = lerFiltros(P("origem=x' OR 1=1--&marca=m'--"), HOJE);
   const w = wherePedidos(f, { de: f.de, ate: f.ate });
   assert.ok(!w.sql.includes('OR 1=1'));
-  assert.ok(!w.sql.includes("'"));
+  // a única aspa permitida é a da constante do canal do site (ORIGEM_SQL); valor do usuário nunca entra no SQL
+  assert.ok(!w.sql.split(ORIGEM_SQL).join('').includes("'"));
+  assert.ok(w.sql.includes(ORIGEM_SQL));
   assert.ok(w.params.includes("x' OR 1=1--"));
   assert.ok(!/^\s*WHERE/i.test(w.sql));
 });
@@ -85,7 +87,7 @@ test('wherePedidos no D1: origem + marca', async () => {
   const d1 = await criarD1Falso();
   const ped = (id, dia, origem, cancelado = 0) =>
     d1.exec(
-      `INSERT INTO pedidos VALUES ('${id}','${dia}','${dia}T10:00:00Z','ok',${cancelado},100,0,0,'site','${origem}',NULL,NULL,NULL,'pix',1,'RJ','Rio','entrega',NULL,'x')`,
+      `INSERT INTO pedidos VALUES ('${id}','${dia}','${dia}T10:00:00Z','ok',${cancelado},100,0,0,'Site','${origem}',NULL,NULL,NULL,'pix',1,'RJ','Rio','entrega',NULL,'x')`,
     );
   const item = (id, marca) => d1.exec(`INSERT INTO itens VALUES ('${id}','s','p','n','${marca}','cat','d',1,100)`);
   ped('1', '2026-11-05', 'Google Ads');

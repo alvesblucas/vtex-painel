@@ -1,10 +1,9 @@
 // Consultas de leitura reaproveitadas pelos handlers. Todo valor vai por `?`; cada consulta aplica os filtros uma vez.
-import { lerFiltros, periodoComparacao, somarDias, usaItens, whereItens, wherePedidos } from './filtros.js';
+import { CANAL_SITE, lerFiltros, ORIGEM_SQL, periodoComparacao, somarDias, usaItens, whereItens, wherePedidos } from './filtros.js';
 import { ErroHttp } from './resposta.js';
 
 const HORA_MS = 3600000;
 const FUSO_PADRAO = -3;
-const CANAL_SITE = 'Site';
 const SEM_CHAVE = '(não informado)';
 
 // Fuso da loja em horas (env.FUSO_HORAS); vazio ou inválido = -3.
@@ -94,7 +93,7 @@ export async function serie(db, f, periodo) {
 }
 
 export const QUEBRAS = {
-  origem: 'p.origem', categoria: 'i.categoria', marca: 'i.marca', pagamento: 'p.pagamento', uf: 'p.uf', entrega: 'p.entrega',
+  origem: ORIGEM_SQL, categoria: 'i.categoria', marca: 'i.marca', pagamento: 'p.pagamento', uf: 'p.uf', entrega: 'p.entrega',
 };
 
 // Todos os grupos, sem ordem; quem chama ordena e corta o top N.
@@ -111,17 +110,75 @@ export async function quebra(db, f, periodo, por) {
 
 const escaparLike = (s) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
+// Uma passada só: a página e o total (COUNT(*) OVER ()) saem da mesma consulta. Página além do fim volta vazia
+// e aí o total sai de uma contagem à parte (caso raro).
+async function paginaComTotal(db, sqlPagina, sqlTotal, params, porPagina, pagina) {
+  const linhas = await todas(db, sqlPagina, [...params, porPagina, (pagina - 1) * porPagina]);
+  if (!linhas.length) {
+    const total = pagina > 1 ? (await db.prepare(sqlTotal).bind(...params).first())?.n ?? 0 : 0;
+    return { itens: [], total };
+  }
+  return { itens: linhas.map(({ total_: _, ...resto }) => resto), total: linhas[0].total_ };
+}
+
+const filtroBusca = (busca) => (busca
+  ? { sql: "(i.nome LIKE ? ESCAPE '\\' OR i.sku LIKE ? ESCAPE '\\')", params: [`%${escaparLike(busca)}%`, `%${escaparLike(busca)}%`] }
+  : null);
+
 export async function produtos(db, f, periodo, { pagina, porPagina, ordem, busca }) {
-  const extra = busca
-    ? { sql: "(i.nome LIKE ? ESCAPE '\\' OR i.sku LIKE ? ESCAPE '\\')", params: [`%${escaparLike(busca)}%`, `%${escaparLike(busca)}%`] }
-    : null;
-  const b = base(f, periodo, { itens: true, extra });
+  const b = base(f, periodo, { itens: true, extra: filtroBusca(busca) });
   const agrupado = `SELECT i.sku AS sku, MAX(i.nome) AS nome, MAX(i.marca) AS marca, MAX(i.categoria) AS categoria,
        SUM(i.qtd) AS qtd, SUM(i.valor) AS valor, COUNT(DISTINCT p.id) AS pedidos
        FROM ${b.from} WHERE ${b.where} GROUP BY i.sku`;
-  const itens = await todas(db, `${agrupado} ORDER BY ${ordem} DESC, sku LIMIT ? OFFSET ?`, [...b.params, porPagina, (pagina - 1) * porPagina]);
-  const total = await db.prepare(`SELECT COUNT(*) AS n FROM (${agrupado})`).bind(...b.params).first();
-  return { itens, total: total?.n ?? 0 };
+  return paginaComTotal(
+    db,
+    `SELECT g.*, COUNT(*) OVER () AS total_ FROM (${agrupado}) g ORDER BY ${ordem} DESC, sku LIMIT ? OFFSET ?`,
+    `SELECT COUNT(*) AS n FROM (${agrupado})`,
+    b.params,
+    porPagina,
+    pagina,
+  );
+}
+
+// Produtos que subiram/caíram em quantidade contra o período de comparação. O lado "antes" manda (só SKUs com
+// 3+ pedidos lá): quem zerou aparece com -100%, quem não vendia antes fica de fora (sem base não há variação).
+const MIN_PEDIDOS_ANTES = 3;
+const FILTRO_MODO = { subiram: 'qtd > qtdAntes', caiu: 'qtd < qtdAntes' };
+const ORDEM_MODO = { subiram: 'varQtd DESC, sku', caiu: 'varQtd ASC, sku' };
+
+export async function produtosVariacao(db, f, atual, antes, { modo, pagina, porPagina, busca }) {
+  const extra = filtroBusca(busca);
+  const agregado = (periodo) => {
+    const b = base(f, periodo, { itens: true, extra });
+    return {
+      sql: `SELECT i.sku AS sku, MAX(i.nome) AS nome, MAX(i.marca) AS marca, MAX(i.categoria) AS categoria,
+              SUM(i.qtd) AS qtd, SUM(i.valor) AS valor, COUNT(DISTINCT p.id) AS pedidos
+            FROM ${b.from} WHERE ${b.where} GROUP BY i.sku`,
+      params: b.params,
+    };
+  };
+  const at = agregado(atual);
+  const an = agregado(antes);
+  const juntos = `WITH atual AS (${at.sql}), antes AS (${an.sql} HAVING COUNT(DISTINCT p.id) >= ${MIN_PEDIDOS_ANTES}),
+    j AS (SELECT a.sku AS sku, COALESCE(t.nome, a.nome) AS nome, COALESCE(t.marca, a.marca) AS marca,
+            COALESCE(t.categoria, a.categoria) AS categoria, COALESCE(t.qtd, 0) AS qtd, a.qtd AS qtdAntes,
+            COALESCE(t.pedidos, 0) AS pedidos, COALESCE(t.valor, 0) AS valor, a.valor AS valorAntes,
+            ROUND((COALESCE(t.qtd, 0) - a.qtd) * 100.0 / a.qtd, 1) AS varQtd
+          FROM antes a LEFT JOIN atual t ON t.sku = a.sku)`;
+  const where = FILTRO_MODO[modo];
+  const params = [...at.params, ...an.params];
+  return paginaComTotal(
+    db,
+    `${juntos} SELECT sku, nome, marca, categoria, qtd, qtdAntes, pedidos, varQtd, valor,
+       CASE WHEN qtd = 0 OR qtdAntes = 0 OR valorAntes = 0 THEN NULL
+            ELSE ROUND(((valor * 1.0 / qtd) / (valorAntes * 1.0 / qtdAntes) - 1) * 100, 1) END AS varPreco,
+       COUNT(*) OVER () AS total_
+     FROM j WHERE ${where} ORDER BY ${ORDEM_MODO[modo]} LIMIT ? OFFSET ?`,
+    `${juntos} SELECT COUNT(*) AS n FROM j WHERE ${where}`,
+    params,
+    porPagina,
+    pagina,
+  );
 }
 
 const TIPOS = ['novo', 'recorrente', 'indefinido'];
@@ -161,33 +218,25 @@ export async function clientes(db, f, periodo) {
 
 const ordenar = (a, b) => String(a).localeCompare(String(b), 'pt-BR');
 
+// Lê a tabela `opcoes` (mantida pelo coletor, ver opcoes-sql.js): poucas mil linhas em vez de varrer o histórico.
 export async function opcoes(db, desde) {
-  const distintos = async (coluna) =>
-    (await todas(db, `SELECT DISTINCT ${coluna} AS v FROM pedidos p WHERE p.dia >= ? AND ${coluna} IS NOT NULL AND ${coluna} <> ''`, [desde])).map((l) => l.v).sort(ordenar);
-  const deItens = async (coluna) =>
-    (await todas(
-      db,
-      `SELECT DISTINCT ${coluna} AS v FROM itens i JOIN pedidos p ON p.id = i.pedido_id
-        WHERE p.dia >= ? AND ${coluna} IS NOT NULL AND ${coluna} <> ''`,
-      [desde],
-    )).map((l) => l.v).sort(ordenar);
-  const pares = await todas(
-    db,
-    `SELECT DISTINCT p.uf AS uf, p.cidade AS cidade FROM pedidos p
-      WHERE p.dia >= ? AND p.uf IS NOT NULL AND p.uf <> '' AND p.cidade IS NOT NULL AND p.cidade <> ''`,
-    [desde],
-  );
+  const linhas = await todas(db, 'SELECT lista, uf, valor FROM opcoes WHERE ultimo_dia >= ?', [desde]);
+  const listas = { origem: [], pagamento: [], entrega: [], uf: [], marca: [], categoria: [] };
   const cidades = {};
-  for (const { uf, cidade } of pares) (cidades[uf] ??= []).push(cidade);
+  for (const { lista, uf, valor } of linhas) {
+    if (lista === 'cidade') (cidades[uf] ??= []).push(valor);
+    else listas[lista]?.push(valor);
+  }
   for (const uf of Object.keys(cidades)) cidades[uf].sort(ordenar);
+  for (const l of Object.values(listas)) l.sort(ordenar);
   return {
-    origens: await distintos('p.origem'),
-    pagamentos: await distintos('p.pagamento'),
-    entregas: await distintos('p.entrega'),
-    ufs: await distintos('p.uf'),
+    origens: listas.origem,
+    pagamentos: listas.pagamento,
+    entregas: listas.entrega,
+    ufs: listas.uf,
     cidades,
-    marcas: await deItens('i.marca'),
-    categorias: await deItens('i.categoria'),
+    marcas: listas.marca,
+    categorias: listas.categoria,
   };
 }
 

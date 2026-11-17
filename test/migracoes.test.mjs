@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { criarD1Falso } from './d1-falso.mjs';
 
 const TABELAS = ['pedidos', 'itens', 'estoque_dia', 'estoque_lista', 'saude_dia', 'automacoes',
-  'pedidos_alerta', 'avaliacoes', 'avaliacao_envio', 'outlet', 'coletas', 'perfis', 'usuarios', 'auditoria'];
+  'pedidos_alerta', 'avaliacoes', 'avaliacao_envio', 'outlet', 'coletas', 'perfis', 'usuarios', 'auditoria', 'opcoes'];
 
 test('cria todas as tabelas', async () => {
   const db = await criarD1Falso();
@@ -56,4 +56,32 @@ test('0003: coletas ganha ultimo_ok sem perder as linhas que já existem', async
     ['carga:2026-10', 1, '2026-11-14T10:00:00.000Z'],
     ['pedidos', 1, '2026-11-15T15:40:00.000Z'],
   ]);
+});
+
+test('0004: carga inicial das opções = sqlAtualizarOpcoes do histórico inteiro', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { readFileSync } = await import('node:fs');
+  const { sqlAtualizarOpcoes } = await import('../functions/_lib/opcoes-sql.js');
+  const ler = (f) => readFileSync(new URL(`../migrations/${f}`, import.meta.url), 'utf8');
+  const db = new DatabaseSync(':memory:');
+  for (const f of ['0001_inicial.sql', '0002_perfis_padrao.sql', '0003_coletas_ultimo_ok.sql']) db.exec(ler(f));
+  const ip = db.prepare(`INSERT INTO pedidos (id, dia, criado, status, cancelado, valor, frete, desconto, canal, origem,
+    pagamento, uf, cidade, entrega, atualizado) VALUES (?, ?, 'x', 'invoiced', ?, 1, 0, 0, ?, ?, ?, ?, ?, ?, 'x')`);
+  ip.run('a', '2025-01-10', 0, 'Site', 'Google', 'pix', 'SP', 'Santos', 'entrega');
+  ip.run('b', '2025-06-01', 1, 'Site', 'Google', 'cartao', 'RJ', '', 'retirada');
+  ip.run('c', '2026-02-03', 0, 'Canal 2', 'Marketplace', 'pix', '', 'Sem UF', 'entrega');
+  const ii = db.prepare('INSERT INTO itens (pedido_id, sku, marca, categoria, qtd, valor) VALUES (?, ?, ?, ?, 1, 1)');
+  ii.run('a', 's1', 'M1', 'C1');
+  ii.run('c', 's2', 'M2', null);
+  ii.run('b', 's3', '', 'C2');
+  db.exec(ler('0004_opcoes.sql'));
+  const tabela = () => db.prepare('SELECT lista, uf, valor, ultimo_dia FROM opcoes ORDER BY 1, 2, 3').all().map((r) => ({ ...r }));
+  const migrado = tabela();
+  db.exec('DELETE FROM opcoes');
+  db.exec(sqlAtualizarOpcoes('0000-01-01', '9999-12-31'));
+  assert.deepEqual(tabela(), migrado);
+  assert.deepEqual(migrado.filter((r) => r.lista === 'cidade').map((r) => [r.uf, r.valor]), [['SP', 'Santos']]);
+  assert.deepEqual(migrado.filter((r) => r.lista === 'origem').map((r) => [r.valor, r.ultimo_dia]),
+    [['Canal 2', '2026-02-03'], ['Google', '2025-06-01']]);
+  assert.deepEqual(migrado.filter((r) => r.lista === 'marca').map((r) => r.valor), ['M1', 'M2']);
 });

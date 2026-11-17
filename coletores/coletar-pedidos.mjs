@@ -10,6 +10,7 @@ import { carregarConfig } from './config.mjs';
 import { chaveCliente, canalDe, linhasDoPedido } from './pedidos-regras.mjs';
 import { sqlValor, upsertSql, criarD1Rest, aplicarComRetentativa } from './d1.mjs';
 import { criarVtex } from './vtex.mjs';
+import { sqlAtualizarOpcoes } from '../functions/_lib/opcoes-sql.js';
 
 const DIA_MS = 86_400_000;
 const HISTORICO_DIAS = 730;
@@ -229,6 +230,11 @@ export async function coletarDias(dias, deps, { fonte = 'pedidos' } = {}) {
     const r = await coletarDia(dia, d);
     total.pedidos += r.pedidos;
     total.itens += r.itens;
+  }
+  // Valores da barra de filtros: só os dias recém-gravados (poucas leituras; grava só valor novo ou dia mais recente).
+  if (total.pedidos > 0) {
+    const ordem = [...dias].sort();
+    await d.aplicar(sqlAtualizarOpcoes(ordem[0], ordem.at(-1)));
   }
   const erros = d.contador.erros - errosAntes;
   const naoAbertos = d.contador.naoAbertos - naoAbertosAntes;

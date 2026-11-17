@@ -461,3 +461,12 @@ test('busca de compra anterior lê só a primeira página', async () => {
   await coletarDias(['2026-11-12'], deps);
   assert.equal(vtex.buscas(), 1);
 });
+
+test('coletarDias: atualiza as opções da barra só com os dias coletados', async () => {
+  const { db, deps } = await montar(vtexFalso([pedido('1000000000001-01', '2026-11-12T13:00:00.000Z')]));
+  await coletarDias(['2026-11-12'], deps);
+  const linhas = (await db.prepare('SELECT lista, valor, ultimo_dia FROM opcoes').all()).results;
+  assert.ok(linhas.length > 0);
+  assert.ok(linhas.every((l) => l.ultimo_dia === '2026-11-12'));
+  for (const lista of ['origem', 'pagamento', 'entrega', 'marca']) assert.ok(linhas.some((l) => l.lista === lista), lista);
+});

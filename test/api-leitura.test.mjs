@@ -13,6 +13,7 @@ import * as clientes from '../functions/api/clientes.js';
 import * as visao from '../functions/api/visao.js';
 import { criarD1Falso } from './d1-falso.mjs';
 import { registrarColeta } from '../coletores/coletar-pedidos.mjs';
+import { sqlAtualizarOpcoes } from '../functions/_lib/opcoes-sql.js';
 
 // ---------- fixture fictícia (centavos distintos, impossíveis de confundir com contagens) ----------
 
@@ -74,6 +75,9 @@ async function inserirPedidos(db, lista) {
       p.valor, p.frete, 0, p.canal, p.origem, p.pagamento, p.uf, p.cidade, p.entrega, p.tipo, '2026-03-08T00:00:00Z').run();
     for (const i of p.itens) await db.prepare(ii).bind(p.id, i.sku, i.nome, i.marca, i.categoria, i.qtd, i.valor).run();
   }
+  // como o coletor: atualiza as opções da barra só nos dias gravados
+  const dias = lista.map((p) => p.dia).sort();
+  if (dias.length) db.exec(sqlAtualizarOpcoes(dias[0], dias.at(-1)));
 }
 
 async function banco() {
@@ -155,8 +159,8 @@ test('resumo com marca=A: soma dos itens da marca (sem frete) e porItens', async
   assert.equal(corpo.atual.pedidos, comA.length);
   assert.equal(corpo.atual.cancelados, 1);
   // combinação com filtro de pedido
-  const r2 = await pedir(db, `/api/vendas/resumo?${PERIODO}&marca=A&origem=Marketplace`, resumo);
-  const mk = comA.filter((p) => p.origem === 'Marketplace');
+  const r2 = await pedir(db, `/api/vendas/resumo?${PERIODO}&marca=A&origem=Canal%202`, resumo);
+  const mk = comA.filter((p) => p.canal === 'Canal 2');
   assert.equal(r2.corpo.atual.pedidos, mk.length);
   assert.equal(r2.corpo.atual.valor, soma(mk, (p) => soma(p.itens.filter((i) => i.marca === 'A'), (i) => i.valor)));
 });
@@ -225,8 +229,9 @@ test('quebra por origem: ordena por valor', async () => {
   const { status, corpo } = await pedir(db, `/api/vendas/quebra?${PERIODO}&por=origem`, quebra);
   assert.equal(status, 200);
   assert.equal(corpo.por, 'origem');
-  const esperado = ['Google Ads', 'Sem UTM', 'Marketplace']
-    .map((o) => ({ chave: o, valor: soma(MARCO_OK.filter((p) => p.origem === o), (p) => p.valor), pedidos: MARCO_OK.filter((p) => p.origem === o).length }))
+  const ef = (p) => (p.canal === 'Site' ? p.origem : p.canal);
+  const esperado = ['Google Ads', 'Sem UTM', 'Canal 2']
+    .map((o) => ({ chave: o, valor: soma(MARCO_OK.filter((p) => ef(p) === o), (p) => p.valor), pedidos: MARCO_OK.filter((p) => ef(p) === o).length }))
     .sort((a, b) => b.valor - a.valor);
   assert.deepEqual(corpo.itens.map(({ chave, valor, pedidos }) => ({ chave, valor, pedidos })), esperado);
   const ga = corpo.itens.find((i) => i.chave === 'Google Ads');
@@ -264,6 +269,38 @@ test('quebra: por inválido → 400', async () => {
   assert.equal((await pedir(db, `/api/vendas/quebra?${PERIODO}`, quebra)).status, 400);
 });
 
+// ---------- origem efetiva (marketplace pelo nome do canal) ----------
+
+test('origem efetiva: marketplace aparece pelo nome do canal', async () => {
+  const db = await banco();
+  const q = await pedir(db, `/api/vendas/quebra?${PERIODO}&por=origem`, quebra);
+  const chaves = q.corpo.itens.map((i) => i.chave);
+  assert.ok(chaves.includes('Canal 2'));
+  assert.ok(!chaves.includes('Marketplace'));
+  const op = await pedir(db, '/api/opcoes', opcoes);
+  assert.ok(op.corpo.origens.includes('Canal 2'));
+  assert.ok(!op.corpo.origens.includes('Marketplace'));
+});
+
+test('filtro origem=<canal> traz só aquele canal, e soma com origem do site', async () => {
+  const db = await banco();
+  const so = await pedir(db, `/api/vendas/resumo?${PERIODO}&origem=Canal%202`, resumo);
+  const mk = MARCO_OK.filter((p) => p.canal === 'Canal 2');
+  assert.equal(so.corpo.atual.pedidos, mk.length);
+  const ambos = await pedir(db, `/api/vendas/resumo?${PERIODO}&origem=Canal%202&origem=Sem%20UTM`, resumo);
+  assert.equal(ambos.corpo.atual.pedidos, mk.length + MARCO_OK.filter((p) => p.origem === 'Sem UTM').length);
+});
+
+test('pedido de canal com origem gravada de site conta pelo canal', async () => {
+  const db = await banco();
+  const p = { ...linha(['m99', '2026-03-04', 'Google Ads', 'pix', 'SP', 'Campinas', 'entrega', null, 0, [A1(1, 12345)]]), canal: 'Canal 3' };
+  await inserirPedidos(db, [p]);
+  const q = await pedir(db, `/api/vendas/quebra?${PERIODO}&por=origem`, quebra);
+  assert.ok(q.corpo.itens.some((i) => i.chave === 'Canal 3'));
+  const ga = q.corpo.itens.find((i) => i.chave === 'Google Ads');
+  assert.equal(ga.pedidos, MARCO_OK.filter((x) => x.origem === 'Google Ads').length);
+});
+
 // ---------- /api/vendas/produtos ----------
 
 test('produtos: busca com % literal, ordem e paginação', async () => {
@@ -291,6 +328,82 @@ test('produtos: busca com % literal, ordem e paginação', async () => {
   assert.equal(p2.corpo.total, 6);
   assert.equal((await pedir(db, `/api/vendas/produtos?${PERIODO}&ordem=nome`, produtos)).status, 400);
   assert.equal((await pedir(db, `/api/vendas/produtos?${PERIODO}&pagina=0`, produtos)).status, 400);
+});
+
+// ---------- /api/vendas/produtos?modo=subiram|caiu ----------
+
+const PV = 'de=2026-05-08&ate=2026-05-14&cmp=anterior';
+const pick = (o, chaves) => Object.fromEntries(chaves.map((k) => [k, o[k]]));
+
+// comparação 01–07/05, atual 08–14/05; um item por pedido
+function pedidosVariacao() {
+  const lista = [];
+  let n = 0;
+  const add = (dia, sku, marca, qtd, valor, extra) => {
+    n += 1;
+    lista.push([`v${String(n).padStart(3, '0')}`, dia, 'Sem UTM', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 0,
+      [it(sku, `Produto ${sku}`, marca, 'Cat', qtd, valor)], extra]);
+  };
+  const vezes = (k, dia, sku, marca, qtd, valor) => { for (let i = 0; i < k; i++) add(dia, sku, marca, qtd, valor); };
+  vezes(3, '2026-05-02', 'S1', 'A', 1, 1000);
+  add('2026-05-09', 'S1', 'A', 3, 3300); add('2026-05-10', 'S1', 'A', 1, 1100);
+  add('2026-05-11', 'S1', 'A', 1, 1100); add('2026-05-12', 'S1', 'A', 1, 1100);
+  vezes(4, '2026-05-03', 'S2', 'A', 1, 1000);
+  add('2026-05-09', 'S2', 'A', 1, 1000);
+  add('2026-05-10', 'S2', 'A', 10, 10000, { cancelado: 1 });
+  vezes(3, '2026-05-04', 'S3', 'B', 1, 1000);
+  vezes(2, '2026-05-05', 'S4', 'A', 1, 1000);
+  vezes(5, '2026-05-12', 'S4', 'A', 1, 1000);
+  vezes(5, '2026-05-13', 'S5', 'A', 1, 1000);
+  vezes(3, '2026-05-06', 'S6', 'B', 1, 1000);
+  vezes(3, '2026-05-13', 'S6', 'B', 1, 1000);
+  return lista.map(linha);
+}
+
+async function bancoVariacao() {
+  const db = await banco();
+  await inserirPedidos(db, pedidosVariacao());
+  return db;
+}
+
+test('produtos modo=subiram: só quem subiu com 3+ pedidos antes', async () => {
+  const { corpo } = await pedir(await bancoVariacao(), `/api/vendas/produtos?${PV}&modo=subiram`, produtos);
+  assert.deepEqual(corpo.itens.map((i) => i.sku), ['S1']);
+  assert.equal(corpo.total, 1);
+  assert.deepEqual(
+    pick(corpo.itens[0], ['qtd', 'qtdAntes', 'pedidos', 'varQtd', 'varPreco', 'valor']),
+    { qtd: 6, qtdAntes: 3, pedidos: 4, varQtd: 100, varPreco: 10, valor: 6600 },
+  );
+});
+
+test('produtos modo=caiu: ordem por queda, inclui quem zerou', async () => {
+  const { corpo } = await pedir(await bancoVariacao(), `/api/vendas/produtos?${PV}&modo=caiu`, produtos);
+  assert.deepEqual(corpo.itens.map((i) => [i.sku, i.varQtd, i.varPreco]), [['S3', -100, null], ['S2', -75, 0]]);
+  assert.equal(corpo.itens[0].qtd, 0);
+  assert.equal(corpo.itens[0].nome, 'Produto S3');
+});
+
+test('produtos modo novo respeita filtro de marca nos dois períodos', async () => {
+  const { corpo } = await pedir(await bancoVariacao(), `/api/vendas/produtos?${PV}&modo=caiu&marca=B`, produtos);
+  assert.deepEqual(corpo.itens.map((i) => i.sku), ['S3']);
+});
+
+test('produtos modo novo com busca, cmp=nenhum e modo inválido', async () => {
+  const db = await bancoVariacao();
+  assert.deepEqual((await pedir(db, `/api/vendas/produtos?${PV}&modo=caiu&busca=S2`, produtos)).corpo.itens.map((i) => i.sku), ['S2']);
+  const sem = await pedir(db, '/api/vendas/produtos?de=2026-05-08&ate=2026-05-14&cmp=nenhum&modo=subiram', produtos);
+  assert.equal(sem.status, 200);
+  assert.equal(sem.corpo.semComparacao, true);
+  assert.deepEqual(sem.corpo.itens, []);
+  assert.equal(sem.corpo.total, 0);
+  assert.equal((await pedir(db, `/api/vendas/produtos?${PV}&modo=outro`, produtos)).status, 400);
+});
+
+test('produtos modo novo sem R$ não traz valor nem varPreco', async () => {
+  const { corpo } = await pedir(await bancoVariacao(), `/api/vendas/produtos?${PV}&modo=subiram`, produtos, { email: 'mkt@exemplo.com' });
+  assert.equal('valor' in corpo.itens[0], false);
+  assert.equal('varPreco' in corpo.itens[0], false);
+  assert.equal(corpo.itens[0].varQtd, 100);
 });
 
 // ---------- /api/clientes ----------
@@ -473,6 +586,29 @@ test('opções: listas distintas ordenadas, cidades por UF, últimos 400 dias, p
   assert.equal(nada.corpo.erro, 'sem-permissao');
 });
 
+test('opções: atualizar uma janela antiga não recua o último dia nem apaga valores', async () => {
+  const db = await banco();
+  const ontem = new Date(Date.parse(`${hojeLocal({})}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+  await inserirPedidos(db, [linha(['r2', ontem, 'E-mail', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 1000, [A1(1, 30017)]])]);
+  db.exec(sqlAtualizarOpcoes('2026-03-01', '2026-03-07'));
+  const r = await db.prepare("SELECT ultimo_dia FROM opcoes WHERE lista = 'origem' AND valor = 'E-mail'").first();
+  assert.equal(r.ultimo_dia, ontem);
+  const a = await db.prepare("SELECT ultimo_dia FROM opcoes WHERE lista = 'marca' AND valor = 'A'").first();
+  assert.equal(a.ultimo_dia, ontem);
+  db.exec(sqlAtualizarOpcoes('2026-03-01', '2026-03-07'));
+  const n = (await db.prepare('SELECT COUNT(*) AS n FROM opcoes').first()).n;
+  db.exec(sqlAtualizarOpcoes('2026-03-01', '2026-03-07'));
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM opcoes').first()).n, n, 'idempotente');
+});
+
+test('opções: a API lê a tabela pronta, não os pedidos', async () => {
+  const db = await banco();
+  await db.prepare("INSERT INTO opcoes (lista, uf, valor, ultimo_dia) VALUES ('marca', '', 'Só na tabela', '2099-01-01')").run();
+  const { corpo } = await pedir(db, '/api/opcoes', opcoes);
+  assert.ok(corpo.marcas.includes('Só na tabela'));
+  assert.throws(() => sqlAtualizarOpcoes("2026-01-01' OR 1=1 --", '2026-01-02'), /Período inválido/);
+});
+
 test('eu: dados do usuário, loja e coletas', async () => {
   const db = await banco();
   const { corpo } = await pedir(db, '/api/eu', eu, { email: 'mkt@exemplo.com', env: { LOJA_NOME: 'Minha Loja' } });
@@ -567,13 +703,15 @@ const ROTAS_VAZAMENTO = [
   ['quebra abril', '/api/vendas/quebra?de=2026-04-01&ate=2026-04-01&por=origem', quebra],
   ['produtos', `/api/vendas/produtos?${PERIODO}`, produtos],
   ['produtos ordem=valor', `/api/vendas/produtos?${PERIODO}&ordem=valor`, produtos],
+  ['produtos subiram', `/api/vendas/produtos?${PV}&modo=subiram`, produtos, bancoVariacao],
+  ['produtos caiu', `/api/vendas/produtos?${PV}&modo=caiu`, produtos, bancoVariacao],
   ['clientes', `/api/clientes?${PERIODO}`, clientes],
   ['visao', `/api/visao?${PERIODO}`, visao],
 ];
 
-for (const [nome, rota, handler] of ROTAS_VAZAMENTO) {
+for (const [nome, rota, handler, criar = banco] of ROTAS_VAZAMENTO) {
   test(`R10 vazamento: ${nome} sem R$ não traz nenhum valor em centavos`, async () => {
-    const db = await banco();
+    const db = await criar();
     const cheio = await pedir(db, rota, handler);
     assert.equal(cheio.status, 200);
     const proibidos = new Set([...CENTAVOS, ...valoresDeDinheiro(cheio.corpo).filter((v) => v >= 1000)]);

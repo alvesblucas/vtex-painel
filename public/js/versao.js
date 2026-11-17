@@ -1,2 +1,2 @@
 // Versão do produto mostrada no rodapé. Um teste garante que é igual à do package.json.
-export const VERSAO = '0.4.0';
+export const VERSAO = '0.5.0';

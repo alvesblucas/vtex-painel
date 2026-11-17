@@ -173,10 +173,10 @@ export function linha(el, pontos, opcoes = {}) {
 /**
  * Barras horizontais, top 10, uma escala só (valor e comparação).
  * itens: [{ chave, valor, cmp?, rotulo? }]
- * opcoes: { formato=int, aoClicar(chave), rotulo='Período', rotuloRef='Comparação', titulo, limite=10 }
+ * opcoes: { formato=int, aoClicar(chave), dicaClique='Filtrar por este item', rotulo='Período', rotuloRef='Comparação', titulo, limite=10 }
  */
 export function barras(el, itens, opcoes = {}) {
-  const { formato = int, aoClicar, rotulo = 'Período', rotuloRef = 'Comparação', titulo = 'Gráfico de barras', limite = 10 } = opcoes;
+  const { formato = int, aoClicar, dicaClique = 'Filtrar por este item', rotulo = 'Período', rotuloRef = 'Comparação', titulo = 'Gráfico de barras', limite = 10 } = opcoes;
   pronto(el);
   el._ro?.disconnect();
   const lista = itens.slice(0, limite);
@@ -199,7 +199,7 @@ export function barras(el, itens, opcoes = {}) {
     linhaEl.className = 'barra-linha';
     if (aoClicar) {
       linhaEl.type = 'button';
-      linhaEl.title = 'Filtrar por este item';
+      linhaEl.title = dicaClique;
       linhaEl.addEventListener('click', () => aoClicar(it.chave));
     } else linhaEl.tabIndex = 0;
     const valorTxt = formato(it.valor ?? 0);
