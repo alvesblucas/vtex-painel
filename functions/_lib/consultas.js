@@ -183,7 +183,7 @@ export async function produtosVariacao(db, f, atual, antes, { modo, pagina, porP
 
 const TIPOS = ['novo', 'recorrente', 'indefinido'];
 
-function segundaFeira(dia) {
+export function segundaFeira(dia) {
   const dow = new Date(`${dia}T00:00:00Z`).getUTCDay();
   return somarDias(dia, -((dow + 6) % 7));
 }
