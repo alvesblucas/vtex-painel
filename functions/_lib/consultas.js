@@ -216,6 +216,25 @@ export async function clientes(db, f, periodo) {
   return { ...tot, pctNovos: pctNovos(tot.novo.pedidos, tot.recorrente.pedidos), porOrigem, porSemana: [...semanas.values()] };
 }
 
+// Novos x recorrentes por origem → utm_campaign (só canal Site, só pedidos classificados). Ordem: mais novos primeiro.
+export const SEM_CAMPANHA = '(sem campanha)';
+
+export async function campanhas(db, f, periodo, { limite = 50 } = {}) {
+  const b = base(f, periodo, { extra: { sql: "p.canal = ? AND p.cliente_tipo IN ('novo', 'recorrente')", params: [CANAL_SITE] } });
+  return todas(
+    db,
+    `SELECT ${ORIGEM_SQL} AS origem, COALESCE(NULLIF(TRIM(p.utm_campaign), ''), ?) AS campanha,
+            COUNT(DISTINCT CASE WHEN p.cliente_tipo = 'novo' THEN p.id END) AS novo,
+            COUNT(DISTINCT CASE WHEN p.cliente_tipo = 'recorrente' THEN p.id END) AS recorrente,
+            SUM(${b.valor}) AS valor
+       FROM ${b.from} WHERE ${b.where}
+      GROUP BY 1, 2
+      ORDER BY novo DESC, recorrente DESC, origem, campanha
+      LIMIT ?`,
+    [SEM_CAMPANHA, ...b.params, limite],
+  );
+}
+
 const ordenar = (a, b) => String(a).localeCompare(String(b), 'pt-BR');
 
 // Lê a tabela `opcoes` (mantida pelo coletor, ver opcoes-sql.js): poucas mil linhas em vez de varrer o histórico.
