@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { criarD1Falso } from './d1-falso.mjs';
 
-const TABELAS = ['pedidos', 'itens', 'estoque_dia', 'estoque_lista', 'saude_dia', 'automacoes',
+const TABELAS = ['mcp_uso', 'pedidos', 'itens', 'estoque_dia', 'estoque_lista', 'saude_dia', 'automacoes',
   'pedidos_alerta', 'avaliacoes', 'avaliacao_envio', 'outlet', 'coletas', 'perfis', 'usuarios', 'auditoria', 'opcoes'];
 
 test('cria todas as tabelas', async () => {
