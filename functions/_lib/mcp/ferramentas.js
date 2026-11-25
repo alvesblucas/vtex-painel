@@ -10,6 +10,7 @@ import * as quebraRota from '../../api/vendas/quebra.js';
 import * as resumoRota from '../../api/vendas/resumo.js';
 import * as serieRota from '../../api/vendas/serie.js';
 import { argsParaQuery, chamarRota, conferirPeriodo, emReais, esquema } from './adaptar.js';
+import { diaUtc, tetoDe, usoDoDia } from './cota.js';
 
 const SEMANAL_ACIMA_DE = 92;
 const TOP_RESUMO = 5;
@@ -50,11 +51,16 @@ const SEM_FILTROS = esquema({}, false);
 
 export const ferramentas = {
   quem_sou_eu: {
-    description: 'Mostra quem está conectado: e-mail, perfil, abas que pode consultar, se vê valores em R$ e até quando há dados.',
+    description: 'Mostra quem está conectado: e-mail, perfil, abas que pode consultar, se vê valores em R$, até quando há dados e quanto do limite diário de consultas do assistente já foi usado.',
     inputSchema: SEM_FILTROS,
     async executar(args, { eu, env, db }) {
       argsParaQuery(args, SEM_FILTROS);
-      return { email: eu.email, perfil: eu.perfil, abas: eu.abas, verValores: eu.verValores, dadosAte: await dadosAte(db ?? env.DB, 'pedidos') };
+      const banco = db ?? env.DB;
+      return {
+        email: eu.email, perfil: eu.perfil, abas: eu.abas, verValores: eu.verValores,
+        dadosAte: await dadosAte(banco, 'pedidos'),
+        usoHoje: { linhas: await usoDoDia(banco, diaUtc()), teto: tetoDe(env) },
+      };
     },
   },
 

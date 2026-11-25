@@ -31,7 +31,7 @@ export async function usoDoDia(db, dia) {
   return Number(r?.total ?? 0);
 }
 
-const tetoDe = (env) => {
+export const tetoDe = (env) => {
   const n = Number(env?.MCP_LINHAS_DIA);
   return Number.isFinite(n) && n > 0 ? n : TETO_PADRAO;
 };

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { onRequest } from '../functions/mcp.js';
 import { limparCacheUsuarios } from '../functions/_lib/permissoes.js';
 import { criarD1Falso } from './d1-falso.mjs';
+import { banco as bancoPedidos } from './fixture-pedidos.mjs';
 
 async function banco() {
   const db = await criarD1Falso();
@@ -16,14 +17,16 @@ async function banco() {
 async function mcp(db, corpo, { email = 'gestao@exemplo.com', metodo = 'POST', env = {} } = {}) {
   const init = { method: metodo, headers: { 'Content-Type': 'application/json' } };
   if (metodo === 'POST') init.body = typeof corpo === 'string' ? corpo : JSON.stringify(corpo);
+  const pendentes = [];
   const ctx = {
     request: new Request('http://localhost:8788/mcp', init),
     env: { DB: db, DEV_EMAIL: email, SUPER_ADMIN: 'chefe@exemplo.com', MCP_ATIVO: '1', ...env },
     data: {},
     params: {},
-    waitUntil: () => {},
+    waitUntil: (p) => pendentes.push(p),
   };
   const r = await onRequest(ctx);
+  await Promise.all(pendentes);
   const texto = await r.text();
   return { status: r.status, corpo: texto ? JSON.parse(texto) : null, headers: r.headers };
 }
@@ -91,4 +94,42 @@ test('mcp: sem login → 401 com WWW-Authenticate', async () => {
   const r = await onRequest(ctx);
   assert.equal(r.status, 401);
   assert.match(r.headers.get('WWW-Authenticate') ?? '', /^Bearer/);
+});
+
+const uso = async (db) => (await db.prepare('SELECT COALESCE(SUM(chamadas),0) AS c, COALESCE(SUM(linhas),0) AS l FROM mcp_uso').first());
+const chamar = (db, name, args, opcoes) => mcp(db, rpc('tools/call', { name, arguments: args }), opcoes);
+const P = { de: '2026-03-01', ate: '2026-03-07' };
+
+test('mcp: chamada com sucesso grava uso; erro de parâmetro não grava', async () => {
+  const db = await bancoPedidos();
+  const ok = await chamar(db, 'vendas_resumo', P);
+  assert.equal(ok.corpo.result.isError, undefined);
+  assert.ok(ok.corpo.result.structuredContent.atual.pedidos > 0);
+  const depois = await uso(db);
+  assert.equal(depois.c, 1);
+  assert.ok(depois.l > 0);
+  const ruim = await chamar(db, 'vendas_resumo', { ...P, cmp: 'ontem' });
+  assert.equal(ruim.corpo.result.isError, true);
+  const semAba = await chamar(db, 'vendas_resumo', P, { email: 'compras@exemplo.com' });
+  assert.equal(semAba.corpo.result.isError, true);
+  assert.deepEqual({ ...(await uso(db)) }, { ...depois });
+});
+
+test('mcp: teto diário bloqueia a chamada seguinte, não a atual', async () => {
+  const db = await bancoPedidos();
+  const env = { MCP_LINHAS_DIA: '1' };
+  const primeira = await chamar(db, 'vendas_resumo', P, { env });
+  assert.equal(primeira.corpo.result.isError, undefined);
+  const segunda = await chamar(db, 'vendas_resumo', P, { env });
+  assert.equal(segunda.corpo.result.isError, true);
+  assert.match(segunda.corpo.result.content[0].text, /Limite diário/);
+  assert.equal((await uso(db)).c, 1);
+});
+
+test('mcp: quem_sou_eu mostra o uso do dia e o teto padrão', async () => {
+  const db = await bancoPedidos();
+  await chamar(db, 'vendas_resumo', P);
+  const eu = (await chamar(db, 'quem_sou_eu', {})).corpo.result.structuredContent;
+  assert.equal(eu.usoHoje.teto, 2500000);
+  assert.ok(eu.usoHoje.linhas > 0);
 });

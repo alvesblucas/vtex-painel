@@ -147,6 +147,28 @@ Depois publique o `public/` de novo.
 - Quem entra pelo Access mas não está cadastrado vê a tela "sem acesso"
 - Toda alteração fica no histórico (aba Usuários e permissões > Histórico)
 
+## Usar com Claude (MCP)
+
+O painel tem um servidor [MCP](https://modelcontextprotocol.io) **só de leitura** em `/mcp`, para assistentes de IA
+(Claude, Claude Code, Cowork) consultarem vendas, produtos, clientes e campanhas sem exportar nada. Ele respeita as
+mesmas permissões do painel: abas do perfil e valores em R$ só para quem pode ver.
+
+**Ferramentas:** `quem_sou_eu`, `resumo_geral`, `vendas_resumo`, `vendas_serie`, `vendas_quebra`, `produtos`,
+`clientes`, `campanhas`, `opcoes_filtro`. Valores em reais; período máximo de 400 dias por consulta.
+
+**Ligar:**
+1. No Cloudflare Zero Trust, crie uma aplicação Access *self-hosted* **separada** só para o caminho `/mcp`
+   (`<projeto>.pages.dev/mcp` e `*.<projeto>.pages.dev/mcp`), com a mesma política de e-mails do painel e
+   **Managed OAuth** ligado (Advanced settings). A aplicação do painel não muda.
+2. No `wrangler.toml`: `MCP_ATIVO = "1"`, `ACCESS_AUD_MCP = "<AUD da aplicação do /mcp>"` e, se quiser,
+   `MCP_LINHAS_DIA` (padrão 2.500.000). Aplique as migrações (tabela `mcp_uso`) e publique.
+3. No Claude: Configurações → Conectores → Adicionar conector personalizado → `https://<projeto>.pages.dev/mcp`.
+   O login é o do Access; só usuários ativos do painel entram.
+
+**Teto diário:** cada chamada soma as linhas lidas do D1 em `mcp_uso`. Ao atingir `MCP_LINHAS_DIA` no dia (UTC), as
+ferramentas respondem "limite diário atingido" até 00:00 UTC. O painel no navegador não é afetado. `quem_sou_eu`
+mostra o uso do dia.
+
 ## Desenvolvimento local
 
 ```bash
