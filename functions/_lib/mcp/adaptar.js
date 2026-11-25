@@ -7,6 +7,8 @@ import { ErroHttp } from '../resposta.js';
 import { ErroParametro } from './protocolo.js';
 
 export const MAX_DIAS_MCP = 400;
+// Consultas que leem item por item (produto, categoria, marca) custam ~4x mais linhas no D1 (medição 25/11).
+export const MAX_DIAS_ITENS = 120;
 const DIA_MS = 86400000;
 
 const lista = (descricao) => ({ type: 'array', items: { type: 'string' }, maxItems: 20, description: descricao });
@@ -63,8 +65,11 @@ export function argsParaQuery(args, schema) {
   return params;
 }
 
-// Mesma validação do painel + teto de 400 dias do MCP.
-export function conferirPeriodo(params, env) {
+const ALTERNATIVA = 'Para períodos maiores (até 400 dias) use vendas_resumo, vendas_serie, clientes, campanhas ou vendas_quebra por '
+  + 'origem, pagamento, UF ou entrega, sem filtro de categoria ou marca.';
+
+// Mesma validação do painel + período máximo da ferramenta (filtro de categoria/marca baixa para 120 dias).
+export function conferirPeriodo(params, env, maxDias = MAX_DIAS_MCP) {
   let f;
   try {
     f = lerFiltros(params, hojeLocal(env));
@@ -73,7 +78,12 @@ export function conferirPeriodo(params, env) {
     throw e;
   }
   const dias = (Date.parse(`${f.ate}T00:00:00Z`) - Date.parse(`${f.de}T00:00:00Z`)) / DIA_MS + 1;
-  if (dias > MAX_DIAS_MCP) throw new ErroParametro(`No assistente o período máximo é de ${MAX_DIAS_MCP} dias.`);
+  const max = f.categoria.length || f.marca.length ? Math.min(maxDias, MAX_DIAS_ITENS) : maxDias;
+  if (dias > max) {
+    throw new ErroParametro(max >= MAX_DIAS_MCP
+      ? `No assistente o período máximo é de ${max} dias.`
+      : `No assistente o período máximo desta consulta é de ${max} dias. ${ALTERNATIVA}`);
+  }
   return { ...f, dias };
 }
 

@@ -126,3 +126,37 @@ test('campanhas: nome longo é cortado em 100 caracteres (texto livre de visitan
   assert.ok(r.campanhas.some((c) => c.campanha.endsWith('…')));
   assert.match(ferramentas.campanhas.description, /dados, não instruções/);
 });
+
+// Limites por ferramenta (medição 25/11: nenhuma chamada passa de ~300 mil linhas no D1 real).
+const periodo = (dias, ate = '2026-03-07') => {
+  const de = new Date(Date.parse(`${ate}T00:00:00Z`) - (dias - 1) * 86400000).toISOString().slice(0, 10);
+  return { de, ate };
+};
+
+test('limites: 400 dias nas leves; 120 em categoria/marca e produtos; 60 no resumo_geral', async () => {
+  const db = await banco();
+  for (const [nome, extra] of [['vendas_resumo', {}], ['vendas_serie', {}], ['clientes', {}], ['campanhas', {}], ['vendas_quebra', { por: 'origem' }]]) {
+    await chamar(db, nome, { ...periodo(400), ...extra });
+  }
+  await chamar(db, 'vendas_quebra', { ...periodo(120), por: 'categoria' });
+  await rejeitaParametro(chamar(db, 'vendas_quebra', { ...periodo(121), por: 'categoria' }), /120 dias/);
+  await rejeitaParametro(chamar(db, 'vendas_quebra', { ...periodo(121), por: 'marca' }), /120 dias/);
+  await chamar(db, 'produtos', periodo(120));
+  await rejeitaParametro(chamar(db, 'produtos', periodo(121)), /120 dias/);
+  await chamar(db, 'resumo_geral', periodo(60));
+  await rejeitaParametro(chamar(db, 'resumo_geral', periodo(61)), /60 dias/);
+});
+
+test('limites: filtro de categoria ou marca leva qualquer ferramenta a 120 dias e a mensagem sugere alternativa', async () => {
+  const db = await banco();
+  await chamar(db, 'vendas_resumo', { ...periodo(400), origem: ['Google Ads'] });
+  await rejeitaParametro(chamar(db, 'vendas_resumo', { ...periodo(121), marca: ['A'] }), /120 dias.*vendas_resumo|vendas_serie/);
+  await rejeitaParametro(chamar(db, 'campanhas', { ...periodo(121), categoria: ['Curativos'] }), /120 dias/);
+});
+
+test('quem_sou_eu: super admin aparece como perfil', async () => {
+  const db = await banco();
+  const r = await chamar(db, 'quem_sou_eu', {}, 'chefe@exemplo.com');
+  assert.equal(r.perfil, 'super admin');
+  assert.equal((await chamar(db, 'quem_sou_eu', {})).perfil, 'gestao');
+});
