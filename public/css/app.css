@@ -464,6 +464,14 @@ button.barra-linha:hover .barra { filter: brightness(1.15); }
 .nr-rec::before { background: var(--cat-rec); }
 .nr-txt { color: var(--text-2); }
 
+/* Campanhas (aba Clientes): linha de origem como cabeçalho clicável; no celular só campanha, novos e recorrentes. */
+.tabela-campanhas .camp-origem th { padding: 14px 10px 6px; border-bottom: 1px solid var(--rule); text-transform: none; letter-spacing: 0; }
+.tabela-campanhas .camp-origem button { color: var(--text); font-weight: 600; font-size: 13px; padding: 0; }
+.tabela-campanhas .camp-origem button:hover { color: var(--accent); }
+.tabela-campanhas .camp-nome { overflow-wrap: anywhere; }
+.tabela-campanhas .nr { justify-content: flex-end; }
+@media (max-width: 600px) { .tabela-campanhas .so-largo { display: none; } }
+
 /* ---------- responsivo ---------- */
 @media (max-width: 1000px) {
   .s3 { grid-column: span 6; } .s4, .s6, .s8 { grid-column: span 12; }

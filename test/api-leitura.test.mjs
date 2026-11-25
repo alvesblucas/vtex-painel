@@ -10,6 +10,8 @@ import * as serie from '../functions/api/vendas/serie.js';
 import * as quebra from '../functions/api/vendas/quebra.js';
 import * as produtos from '../functions/api/vendas/produtos.js';
 import * as clientes from '../functions/api/clientes.js';
+import * as campanhasRota from '../functions/api/clientes/campanhas.js';
+import { campanhas } from '../functions/_lib/consultas.js';
 import * as visao from '../functions/api/visao.js';
 import { criarD1Falso } from './d1-falso.mjs';
 import { registrarColeta } from '../coletores/coletar-pedidos.mjs';
@@ -25,19 +27,19 @@ const B2 = (q, v) => it('B2', 'Seringa 5 ml', 'B', 'Seringas', q, v);
 
 // [id, dia, origem, pagamento, uf, cidade, entrega, cliente_tipo, frete, itens, extra]
 const PEDIDOS = [
-  ['p01', '2026-03-01', 'Google Ads', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 1501, [A1(2, 123457)]],
+  ['p01', '2026-03-01', 'Google Ads', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 1501, [A1(2, 123457)], { campanha: 'marca' }],
   ['p02', '2026-03-01', 'Sem UTM', 'cartao', 'RJ', 'Niterói', 'entrega', 'recorrente', 2203, [B1(1, 98765)]],
   ['p03', '2026-03-01', 'Marketplace', 'boleto', 'SP', 'São Paulo', 'entrega', null, 3307, [A2(3, 45671), B1(1, 98713)]],
-  ['p04', '2026-03-02', 'Google Ads', 'pix', 'MG', 'Belo Horizonte', 'entrega', 'novo', 1109, [A1(1, 61237)]],
-  ['p05', '2026-03-02', 'Google Ads', 'cartao', 'SP', 'Campinas', 'entrega', 'recorrente', 1999, [B2(4, 77731)]],
+  ['p04', '2026-03-02', 'Google Ads', 'pix', 'MG', 'Belo Horizonte', 'entrega', 'novo', 1109, [A1(1, 61237)], { campanha: ' marca ' }],
+  ['p05', '2026-03-02', 'Google Ads', 'cartao', 'SP', 'Campinas', 'entrega', 'recorrente', 1999, [B2(4, 77731)], { campanha: 'marca' }],
   ['p06', '2026-03-02', 'Sem UTM', 'pix', 'SP', 'Santos', 'entrega', 'novo', 2711, [A2(2, 33397)]],
   ['p07', '2026-03-03', 'Marketplace', 'cartao', 'RJ', 'Rio de Janeiro', 'entrega', null, 1871, [B2(1, 54329)]],
-  ['p08', '2026-03-03', 'Google Ads', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 1433, [it('A3', 'Gaze 50% algodão', 'A', 'Curativos', 1, 27191)]],
+  ['p08', '2026-03-03', 'Google Ads', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 1433, [it('A3', 'Gaze 50% algodão', 'A', 'Curativos', 1, 27191)], { campanha: 'shopping-a' }],
   ['p09', '2026-03-03', 'Sem UTM', 'boleto', 'SP', 'Santos', 'entrega', 'recorrente', 2557, [it('A4', 'Gaze 500 unidades', 'A', 'Curativos', 1, 39163)]],
   ['p10', '2026-03-05', 'Google Ads', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 1667, [B1(2, 187319)]],
   ['p11', '2026-03-05', 'Sem UTM', 'pix', 'RJ', 'Niterói', 'entrega', 'indefinido', 1201, [A1(1, 58943)]],
   ['p12', '2026-03-05', 'Marketplace', 'pix', 'SP', 'São Paulo', 'entrega', null, 2099, [A2(1, 71129)]],
-  ['p13', '2026-03-05', 'Google Ads', 'cartao', 'SP', 'Campinas', 'entrega', 'recorrente', 10231, [A1(5, 903347)], { cancelado: 1 }],
+  ['p13', '2026-03-05', 'Google Ads', 'cartao', 'SP', 'Campinas', 'entrega', 'recorrente', 10231, [A1(5, 903347)], { cancelado: 1, campanha: 'marca' }],
   ['p14', '2026-03-06', 'Google Ads', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 1381, [A1(1, 66851)]],
   ['p15', '2026-03-06', 'Sem UTM', 'pix', 'RJ', 'Rio de Janeiro', 'retirada', 'recorrente', 0, [B2(2, 84463)]],
   ['p16', '2026-03-06', 'Marketplace', 'cartao', 'MG', 'Belo Horizonte', 'entrega', null, 2441, [B1(1, 92347)]],
@@ -46,7 +48,7 @@ const PEDIDOS = [
   ['p19', '2026-03-07', 'Google Ads', 'boleto', 'RJ', 'Rio de Janeiro', 'entrega', 'recorrente', 2963, [B1(3, 112589)]],
   ['p20', '2026-03-07', 'Marketplace', 'pix', 'SP', 'São Paulo', 'entrega', null, 1123, [A1(1, 43577)]],
   // período de comparação "anterior" (22–28/02)
-  ['c01', '2026-02-22', 'Google Ads', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 1299, [A1(1, 57193)]],
+  ['c01', '2026-02-22', 'Google Ads', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 1299, [A1(1, 57193)], { campanha: 'marca' }],
   ['c02', '2026-02-24', 'Sem UTM', 'pix', 'SP', 'Campinas', 'entrega', 'recorrente', 1847, [B1(1, 81239)]],
   ['c03', '2026-02-28', 'Google Ads', 'pix', 'SP', 'Campinas', 'entrega', 'novo', 1361, [A2(1, 63541)]],
 ];
@@ -61,18 +63,18 @@ const linha = (p) => {
   const [id, dia, origem, pagamento, uf, cidade, entrega, tipo, frete, itens, extra = {}] = p;
   const valor = frete + itens.reduce((s, i) => s + i.valor, 0);
   const canal = origem === 'Marketplace' ? 'Canal 2' : 'Site';
-  return { id, dia, origem, pagamento, uf, cidade, entrega, tipo, frete, itens, valor, canal, cancelado: extra.cancelado ?? 0 };
+  return { id, dia, origem, pagamento, uf, cidade, entrega, tipo, frete, itens, valor, canal, cancelado: extra.cancelado ?? 0, campanha: extra.campanha ?? null };
 };
 const TODOS = [...PEDIDOS, ...ABRIL].map(linha);
 const CENTAVOS = new Set(TODOS.flatMap((p) => [p.valor, p.frete, ...p.itens.map((i) => i.valor)]).filter((v) => v >= 1000));
 
 async function inserirPedidos(db, lista) {
   const ip = `INSERT INTO pedidos (id, dia, criado, status, cancelado, valor, frete, desconto, canal, origem, pagamento,
-    uf, cidade, entrega, cliente_tipo, atualizado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
+    uf, cidade, entrega, cliente_tipo, atualizado, utm_campaign) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
   const ii = 'INSERT INTO itens (pedido_id, sku, nome, marca, categoria, qtd, valor) VALUES (?,?,?,?,?,?,?)';
   for (const p of lista) {
     await db.prepare(ip).bind(p.id, p.dia, `${p.dia}T15:00:00.000Z`, p.cancelado ? 'canceled' : 'invoiced', p.cancelado,
-      p.valor, p.frete, 0, p.canal, p.origem, p.pagamento, p.uf, p.cidade, p.entrega, p.tipo, '2026-03-08T00:00:00Z').run();
+      p.valor, p.frete, 0, p.canal, p.origem, p.pagamento, p.uf, p.cidade, p.entrega, p.tipo, '2026-03-08T00:00:00Z', p.campanha).run();
     for (const i of p.itens) await db.prepare(ii).bind(p.id, i.sku, i.nome, i.marca, i.categoria, i.qtd, i.valor).run();
   }
   // como o coletor: atualiza as opções da barra só nos dias gravados
@@ -433,6 +435,39 @@ test('clientes: só canal Site, novos x recorrentes, por origem e semana', async
   assert.equal(vazio.corpo.cmp, null);
 });
 
+// ---------- /api/clientes/campanhas ----------
+
+test('campanhas: origem → campanha, trim, sem cancelados, comparação', async () => {
+  const db = await banco();
+  const { status, corpo } = await pedir(db, `/api/clientes/campanhas?${PERIODO}`, campanhasRota);
+  assert.equal(status, 200);
+  const g = corpo.campanhas.find((c) => c.origem === 'Google Ads' && c.campanha === 'marca');
+  assert.deepEqual([g.novo, g.recorrente, g.novoCmp], [2, 1, 1]); // p01+p04 novos, p05 recorrente; p13 cancelado fora; c01
+  assert.equal(g.valor, soma(TODOS.filter((p) => ['p01', 'p04', 'p05'].includes(p.id)), (p) => p.valor));
+  assert.ok(corpo.campanhas.some((c) => c.origem === 'Google Ads' && c.campanha === 'shopping-a' && c.novo === 1));
+  assert.ok(corpo.campanhas.some((c) => c.campanha === '(sem campanha)'));
+  assert.ok(!corpo.campanhas.some((c) => c.origem === 'Canal 2' || c.origem === 'Marketplace'));
+  assert.equal(corpo.campanhas[0].novo >= corpo.campanhas.at(-1).novo, true);
+  assert.equal(corpo.dadosAte, '2026-03-08T03:00:00.000Z');
+});
+
+test('campanhas: sem comparação → novoCmp null; sem ver_valores → sem valor; sem aba → 403', async () => {
+  const db = await banco();
+  const sem = await pedir(db, `/api/clientes/campanhas?${PERIODO}&cmp=nenhum`, campanhasRota);
+  assert.ok(sem.corpo.campanhas.length > 0);
+  assert.ok(sem.corpo.campanhas.every((c) => c.novoCmp === null));
+  const mkt = await pedir(db, `/api/clientes/campanhas?${PERIODO}`, campanhasRota, { email: 'mkt@exemplo.com' });
+  assert.ok(mkt.corpo.campanhas.every((c) => !('valor' in c)));
+  assert.equal((await pedir(db, '/api/clientes/campanhas', campanhasRota, { email: 'compras@exemplo.com' })).status, 403);
+});
+
+test('campanhas: limite corta a lista', async () => {
+  const db = await banco();
+  const f = { de: '2026-03-01', ate: '2026-03-07', cmp: 'nenhum', origem: [], categoria: [], marca: [], pagamento: [], uf: [], cidade: [], entrega: [] };
+  assert.equal((await campanhas(db, f, f, { limite: 2 })).length, 2);
+  assert.ok((await campanhas(db, f, f)).length > 2);
+});
+
 // ---------- /api/visao ----------
 
 test('visão: compras (sem R$, sem vendas) não recebe cartoes.vendas nem valor', async () => {
@@ -706,6 +741,7 @@ const ROTAS_VAZAMENTO = [
   ['produtos subiram', `/api/vendas/produtos?${PV}&modo=subiram`, produtos, bancoVariacao],
   ['produtos caiu', `/api/vendas/produtos?${PV}&modo=caiu`, produtos, bancoVariacao],
   ['clientes', `/api/clientes?${PERIODO}`, clientes],
+  ['campanhas', `/api/clientes/campanhas?${PERIODO}`, campanhasRota],
   ['visao', `/api/visao?${PERIODO}`, visao],
 ];
 
