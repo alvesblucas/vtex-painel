@@ -7,7 +7,8 @@ export class ErroCota extends Error {
 
 export const diaUtc = (agora = Date.now()) => new Date(agora).toISOString().slice(0, 10);
 
-// Proxy do D1 que soma as linhas lidas: meta.rows_read do all() (sem meta: nº de linhas devolvidas) e 1 por first().
+// Proxy do D1 que soma as linhas lidas (meta.rows_read; sem meta: nº de linhas devolvidas). first() vira all() para
+// também somar o rows_read real: um agregado devolve 1 linha, mas pode varrer centenas de milhares.
 export function contarLeituras(db) {
   let total = 0;
   const embrulhar = (cmd) => ({
@@ -17,9 +18,10 @@ export function contarLeituras(db) {
       total += Number(r?.meta?.rows_read ?? r?.results?.length ?? 0);
       return r;
     },
-    async first(...a) {
-      total += 1;
-      return cmd.first(...a);
+    async first(coluna) {
+      const linha = (await this.all()).results?.[0] ?? null;
+      if (coluna === undefined) return linha;
+      return linha ? linha[coluna] ?? null : null;
     },
     run: (...a) => cmd.run(...a),
   });

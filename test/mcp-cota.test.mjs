@@ -49,3 +49,25 @@ test('exigirCota: teto padrão 2.500.000 e configurável', async () => {
   await assert.rejects(exigirCota(vazio, { MCP_LINHAS_DIA: '10' }, AGORA), ErroCota);
   assert.equal((await exigirCota(vazio, { MCP_LINHAS_DIA: '11' }, AGORA)).teto, 11);
 });
+
+test('contarLeituras: first() soma o rows_read real da consulta (agregados varrem muitas linhas)', async () => {
+  const falso = {
+    prepare: () => ({
+      bind() { return this; },
+      all: async () => ({ results: [{ total: 7, outra: 1 }], meta: { rows_read: 250000 } }),
+      first: async () => ({ total: 7, outra: 1 }),
+      run: async () => ({ meta: {} }),
+    }),
+  };
+  const c = contarLeituras(falso);
+  assert.deepEqual(await c.db.prepare('SELECT SUM(x) AS total').bind(1).first(), { total: 7, outra: 1 });
+  assert.equal(await c.db.prepare('SELECT SUM(x) AS total').first('total'), 7);
+  assert.equal(c.linhas(), 500000);
+});
+
+test('contarLeituras: first() sem linha devolve null', async () => {
+  const db = await criarD1Falso();
+  const c = contarLeituras(db);
+  assert.equal(await c.db.prepare("SELECT * FROM perfis WHERE id = 'nao-existe'").first(), null);
+  assert.equal(await c.db.prepare("SELECT id FROM perfis WHERE id = 'nao-existe'").first('id'), null);
+});

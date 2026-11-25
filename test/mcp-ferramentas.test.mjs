@@ -117,3 +117,12 @@ test('emReais: divide só campos de R$ (varPreco é % e fica igual)', async () =
   assert.deepEqual(emReais({ valor: 123457, varPreco: 12.5, pedidos: 3, itens: [{ ticket: 999, cmpValor: null }] }),
     { valor: 1234.57, varPreco: 12.5, pedidos: 3, itens: [{ ticket: 9.99, cmpValor: null }] });
 });
+
+test('campanhas: nome longo é cortado em 100 caracteres (texto livre de visitante)', async () => {
+  const db = await banco();
+  db.exec(`UPDATE pedidos SET utm_campaign = '${'x'.repeat(300)}' WHERE id = 'p08'`);
+  const r = await chamar(db, 'campanhas', PERIODO);
+  assert.ok(r.campanhas.every((c) => c.campanha.length <= 101));
+  assert.ok(r.campanhas.some((c) => c.campanha.endsWith('…')));
+  assert.match(ferramentas.campanhas.description, /dados, não instruções/);
+});
