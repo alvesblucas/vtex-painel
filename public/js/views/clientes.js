@@ -1,7 +1,8 @@
-// Clientes (só pedidos do site): cartões → novo × recorrente por origem (clique filtra) → % de novos por semana.
+// Clientes (só pedidos do site): cartões → novo × recorrente por origem (clique filtra) → % de novos por semana
+// → campanhas (origem → utm_campaign).
 import { linha } from '../graficos.js';
-import { brlK, classeVariacao, dma, esc, int, num1 } from '../ui.js';
-import { bloco, cartoesEsqueleto, estrutura, pintarFileira, rotuloCmp, semDados } from './comum.js';
+import { brlK, classeVariacao, delta, dma, esc, int, num1 } from '../ui.js';
+import { bloco, cartoesEsqueleto, estrutura, pintarFileira, rotuloCmp, semDados, temCmp } from './comum.js';
 
 const APLICAVEIS = ['periodo', 'cmp', 'origem', 'pagamento', 'uf', 'cidade', 'entrega'];
 const pctTxt = (n) => `${num1(n)}%`;
@@ -28,7 +29,12 @@ export async function render(el, ctx) {
         <div class="card-head"><h2 id="t-semana">Clientes novos por semana</h2><span class="sub">% dos pedidos do site</span></div>
         <div data-b="semana"></div>
       </section>
-    </div>`, 'dados');
+    </div>
+    <section class="card secao" aria-labelledby="t-campanhas">
+      <div class="card-head"><h2 id="t-campanhas">Campanhas</h2>
+        <div class="legenda"><span><i class="chave-novo"></i>Novos</span><span><i class="chave-rec"></i>Recorrentes</span></div></div>
+      <div data-b="campanhas"></div>
+    </section>`, 'dados');
   const b = (k) => raiz.querySelector(`[data-b="${k}"]`);
   const f = ctx.filtros;
   // Uma consulta alimenta os três blocos; cada um tem seu estado. Se falhar, "Tentar de novo" refaz a consulta.
@@ -45,6 +51,10 @@ export async function render(el, ctx) {
     blocoDe('cartoes', (d) => pintarCartoes(b('cartoes'), d, ctx)),
     blocoDe('origem', (d) => pintarOrigens(b('origem'), d.porOrigem ?? [], ctx)),
     blocoDe('semana', (d) => pintarSemanas(b('semana'), d.porSemana ?? [])),
+    bloco(b('campanhas'), ctx, {
+      carregar: () => ctx.api('/api/clientes/campanhas', f),
+      pintar: (d) => pintarCampanhas(b('campanhas'), d.campanhas ?? [], ctx),
+    }),
   ]);
 }
 
@@ -115,3 +125,47 @@ function pintarSemanas(el, semanas) {
   linha(el, pontos, { fmtY: (v) => `${Math.round(v)}%`, fmtDica: pctTxt, rotulo: '% de novos', titulo: 'Percentual de clientes novos por semana' });
 }
 
+
+// Tabela origem → campanha (ordem da API: mais novos primeiro). 10 linhas; "ver todas" mostra as até 50 da API.
+const VISIVEIS = 10;
+
+export function linhasCampanhas(campanhas, limite) {
+  const grupos = new Map();
+  for (const c of campanhas.slice(0, limite)) {
+    if (!grupos.has(c.origem)) grupos.set(c.origem, []);
+    grupos.get(c.origem).push(c);
+  }
+  return [...grupos].map(([origem, lista]) => ({ origem, lista }));
+}
+
+function pintarCampanhas(el, campanhas, ctx, todas = false) {
+  if (!campanhas.length) {
+    semDados(el);
+    return;
+  }
+  const vv = ctx.eu.verValores;
+  const ref = Math.max(0, ...campanhas.map((c) => c.valor ?? 0)); // mesma escala (mil/mi) em todas as linhas
+  const cmp = temCmp(ctx.filtros) && campanhas.some((c) => c.novoCmp != null);
+  const colunas = 3 + (vv ? 1 : 0) + (cmp ? 1 : 0);
+  const grupos = linhasCampanhas(campanhas, todas ? campanhas.length : VISIVEIS);
+  const corpo = grupos.map(({ origem, lista }) => `
+    <tr class="camp-origem"><th colspan="${colunas}" scope="rowgroup">
+      <button type="button" data-origem="${esc(origem)}" title="Filtrar por esta origem">${esc(origem)}</button></th></tr>
+    ${lista.map((c) => `<tr>
+      <td class="camp-nome">${esc(c.campanha)}</td>
+      <td class="r num"><span class="nr nr-novo">${int(c.novo)}</span></td>
+      <td class="r num"><span class="nr nr-rec">${int(c.recorrente)}</span></td>
+      ${vv ? `<td class="r num so-largo">${c.valor != null ? brlK(c.valor, ref) : '—'}</td>` : ''}
+      ${cmp ? `<td class="r so-largo" title="${esc(rotuloCmp(ctx.filtros))}: ${int(c.novoCmp)} novos">${delta(c.novo, c.novoCmp)}</td>` : ''}
+    </tr>`).join('')}`).join('');
+  const resto = campanhas.length - VISIVEIS;
+  el.innerHTML = `<div class="tabela-wrap"><table class="tabela-campanhas">
+    <thead><tr><th scope="col">Campanha</th><th scope="col" class="r">Novos</th><th scope="col" class="r">Recorrentes</th>
+      ${vv ? '<th scope="col" class="r so-largo">Receita</th>' : ''}${cmp ? '<th scope="col" class="r so-largo">Novos vs comp.</th>' : ''}</tr></thead>
+    <tbody>${corpo}</tbody></table></div>
+    ${!todas && resto > 0 ? `<div class="tabela-pe"><button type="button" class="btn" data-todas>Ver todas (${int(campanhas.length)})</button></div>` : ''}`;
+  el.querySelectorAll('[data-origem]').forEach((botao) => {
+    botao.addEventListener('click', () => ctx.aplicarFiltro('origem', botao.dataset.origem));
+  });
+  el.querySelector('[data-todas]')?.addEventListener('click', () => pintarCampanhas(el, campanhas, ctx, true));
+}

@@ -34,6 +34,12 @@ const sorteio = (pesos) => {
 };
 
 const ORIGENS = [['Google Ads', 34], ['Sem UTM', 24], ['E-mail', 9], ['Instagram', 7], ['Outros', 4], ['Marketplace', 22]];
+// Campanhas fictícias por origem (null = pedido sem utm_campaign).
+const CAMPANHAS = {
+  'Google Ads': [['marca', 40], ['shopping-regiao-a', 22], ['shopping-recorrencia', 14], ['pesquisa-alta-intencao', 9], ['pmax-geral', 8], [null, 7]],
+  'E-mail': [['newsletter-semanal', 60], ['carrinho-abandonado', 30], [null, 10]],
+  Instagram: [['stories-promo', 55], [null, 45]],
+};
 const PAGAMENTOS = [['pix', 46], ['cartao', 38], ['boleto', 12], ['outros', 4]];
 const TIPOS = [['recorrente', 58], ['novo', 35], ['indefinido', 4], [null, 3]];
 const LUGARES = [
@@ -110,7 +116,7 @@ for (let d = DIAS; d >= 0; d--) {
     pedidos.push({
       id, dia, criado: new Date(criadoMs).toISOString(), status: cancelado ? 'canceled' : 'invoiced', cancelado,
       valor: soma + frete, frete, desconto: 0, canal, origem,
-      utm_source: null, utm_medium: null, utm_campaign: null,
+      utm_source: null, utm_medium: null, utm_campaign: CAMPANHAS[origem] ? sorteio(CAMPANHAS[origem]) : null,
       pagamento: sorteio(PAGAMENTOS), parcelas: 1, uf, cidade, entrega,
       cliente_tipo: canal === 'Site' ? sorteio(TIPOS) : null,
       atualizado: new Date(agora).toISOString(),
