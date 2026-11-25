@@ -160,3 +160,12 @@ test('quem_sou_eu: super admin aparece como perfil', async () => {
   assert.equal(r.perfil, 'super admin');
   assert.equal((await chamar(db, 'quem_sou_eu', {})).perfil, 'gestao');
 });
+
+test('descrições: período máximo certo e sem código vazado', () => {
+  for (const [n, t] of Object.entries(ferramentas)) assert.ok(!/=>|function/.test(t.description), n);
+  assert.match(ferramentas.produtos.description, /Período máximo: 120 dias/);
+  assert.match(ferramentas.vendas_quebra.description, /Período máximo: 400 dias/);
+  assert.match(ferramentas.vendas_quebra.description, /categoria ou marca o período máximo é de 120 dias/);
+  assert.match(ferramentas.resumo_geral.description, /Período máximo: 60 dias/);
+  assert.match(ferramentas.campanhas.description, /Período máximo: 400 dias \(120 com filtro de categoria ou marca\)/);
+});
