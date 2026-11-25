@@ -86,3 +86,14 @@ test('emailDaRequisicao: usa o JWT do header e falha fechado sem configuração'
   await rejeita(emailDaRequisicao(req('https://meu-painel.pages.dev/api/eu'), env, { agora: AGORA, buscarChaves }));
   await rejeita(emailDaRequisicao(com, {}, { agora: AGORA, buscarChaves }));
 });
+
+test('emailDaRequisicao: opcoes.aud troca o AUD esperado (painel x MCP não se misturam)', async () => {
+  const AUD_MCP = 'aud-mcp-456';
+  const env = { ACCESS_TEAM: EQUIPE, ACCESS_AUD: AUD };
+  const doMcp = req('https://meu-painel.pages.dev/mcp', { 'Cf-Access-Jwt-Assertion': await assinar(PAR.privada, { ...base, aud: [AUD_MCP] }) });
+  const doPainel = req('https://meu-painel.pages.dev/mcp', { 'Cf-Access-Jwt-Assertion': await assinar(PAR.privada, base) });
+  assert.equal(await emailDaRequisicao(doMcp, env, { aud: AUD_MCP, agora: AGORA, buscarChaves }), 'maria@exemplo.com');
+  await rejeita(emailDaRequisicao(doMcp, env, { agora: AGORA, buscarChaves }));
+  await rejeita(emailDaRequisicao(doPainel, env, { aud: AUD_MCP, agora: AGORA, buscarChaves }));
+  await rejeita(emailDaRequisicao(doMcp, env, { aud: '', agora: AGORA, buscarChaves }));
+});

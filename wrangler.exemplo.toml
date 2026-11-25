@@ -18,6 +18,10 @@ AGENDA_JSON = '{"pedidos":{"horasMax":3}}'   # atraso máximo por fonte antes do
 # Login: Cloudflare Access (equipe e AUD da aplicação)
 ACCESS_TEAM = "minhaequipe"
 ACCESS_AUD = "aud-da-aplicacao-no-access"
+# Servidor MCP (/mcp) para assistentes de IA — ver README "Usar com Claude (MCP)". Desligado por padrão.
+MCP_ATIVO = "0"                     # "1" liga o /mcp
+ACCESS_AUD_MCP = "aud-da-aplicacao-do-mcp"   # aplicação Access separada, só do caminho /mcp, com Managed OAuth
+MCP_LINHAS_DIA = "2500000"          # teto diário de linhas lidas pelo MCP (cota D1 Free = 5 milhões)
 
 # Desenvolvimento local: crie .dev.vars (não versionado) com, por exemplo:
 #   DEV_EMAIL=voce@exemplo.com      (só vale em localhost; dispensa o Access)
